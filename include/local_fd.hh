@@ -12,12 +12,9 @@ namespace ivanp {
 
 struct local_fd {
   int fd;
-  local_fd(const char* name)
-  : fd(::open([](const char* name){
-      if (name && *name) return name;
-      ERROR1("empty file name");
-    }(name), O_RDONLY))
-  {
+  local_fd(const char* name) {
+    if (!name || !*name) ERROR1("empty file name");
+    fd = ::open(name,O_RDONLY);
     if (fd < 0) THROW_ERRNO("open(",name,")");
   }
   ~local_fd() { ::close(fd); }
