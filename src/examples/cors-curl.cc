@@ -61,15 +61,12 @@ int main(int argc, char* argv[]) {
             "invalid url");
         } else {
           std::string sbuf;
-          bool first = true;
           for (const auto& [name, val]: req["Accept-Encoding"]) {
             auto tmp = cat(" -H '",name,": ",val,'\'');
-            if (first) {
+            if (sbuf.empty())
               sbuf = std::move(tmp);
-              first = false;
-            } else {
+            else
               sbuf += tmp;
-            }
           }
           auto cmd = cat(
             "curl -is", sbuf,
@@ -102,7 +99,8 @@ int main(int argc, char* argv[]) {
               std::basic_string_view<char,ivanp::char_traits_i> line(a,b);
               a = b+1;
               if (line.starts_with("cross-origin") ||
-                  line.starts_with("Access-Control")
+                  line.starts_with("Access-Control") ||
+                  line.starts_with("Connection:")
               ) continue;
               (header += rstrip({line.data(),line.size()})) += "\r\n";
               if (*a=='\r') ++a;
@@ -115,16 +113,13 @@ int main(int argc, char* argv[]) {
             sock << sbuf;
           }
         }
-      } else if (!strcmp(req.method,"POST")) { // ===================
-        TEST(req.method)
-      } else if (!strcmp(req.method,"HEAD")) { // ===================
-        TEST(req.method)
       } else {
         HTTP_ERROR(501,req.method," method not implemented");
       }
 
       // must close the socket if not keep-alive
       if (!keep_alive) sock.close();
+      // TODO: add socket to timed queue if keep-alive
       // must close socket on any error
     } catch (const http::error& e) {
       sock << e;

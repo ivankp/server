@@ -64,6 +64,12 @@ public:
 
 void validate_path(const char* path);
 
+std::string header(
+  std::string_view mime,
+  size_t size,
+  std::string_view headers={}
+);
+
 std::string with_header(
   std::string_view mime,
   std::string_view data,

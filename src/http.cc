@@ -2,8 +2,9 @@
 #include <cstdlib>
 #include <algorithm>
 #include <unordered_map>
-#include "whole_file.hh"
 
+#include "whole_file.hh"
+#include "numconv.hh"
 #include "debug.hh"
 
 namespace ivanp::http {
@@ -282,17 +283,27 @@ void validate_path(const char* path) {
   }
 }
 
+std::string header(
+  std::string_view mime,
+  size_t size,
+  std::string_view headers
+) {
+  return cat(
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: ", mime, "\r\n"
+    "Content-Length: ", ntos(size), "\r\n",
+    headers, "\r\n");
+}
+
 std::string with_header(
   std::string_view mime,
   std::string_view data,
   std::string_view headers
 ) {
-  char buf[21];
-  sprintf(buf,"%zu",data.size());
   return cat(
     "HTTP/1.1 200 OK\r\n"
     "Content-Type: ", mime, "\r\n"
-    "Content-Length: ", buf, "\r\n",
+    "Content-Length: ", ntos(data.size()), "\r\n",
     headers, "\r\n",
     data);
 }
