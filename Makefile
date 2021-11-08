@@ -25,7 +25,11 @@ bin/examples/cors-curl: $(patsubst %, .build/%.o, \
   server socket whole_file http \
 )
 LF_examples/cors-curl := -pthread
-L_examples/cors-curl :=
+
+bin/examples/file-server: $(patsubst %, .build/%.o, \
+  server socket whole_file http \
+)
+LF_examples/file-server := -pthread
 
 #####################################################################
 

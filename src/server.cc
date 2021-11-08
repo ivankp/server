@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <sys/epoll.h>
+#include <sys/timerfd.h>
 
 #include "error.hh"
 // #include "debug.hh"
@@ -38,7 +39,7 @@ server::server(port_t port, unsigned epoll_buffer_size)
   nonblock(main_socket);
   PCALL(listen)(main_socket, SOMAXCONN/*backlog*/);
 
-  epoll_add(main_socket);
+  if (epoll_add(main_socket)) THROW_ERRNO("epoll_add()");
 
   epoll_events = new epoll_event[n_epoll_events];
 }
@@ -48,12 +49,12 @@ server::~server() {
   delete[] epoll_events;
 }
 
-void server::epoll_add(int fd) {
+bool server::epoll_add(int fd) {
   epoll_event event {
     .events = EPOLLIN | EPOLLRDHUP | EPOLLET,
     .data = { .fd = fd }
   };
-  PCALL(epoll_ctl)(epoll,EPOLL_CTL_ADD,fd,&event);
+  return ::epoll_ctl(epoll,EPOLL_CTL_ADD,fd,&event);
 }
 
 void server::loop() noexcept {
@@ -79,8 +80,12 @@ void server::loop() noexcept {
             }
 
             nonblock(sock);
-            epoll_add(sock);
+            if (epoll_add(sock)) ::close(sock); // TODO: is this ok?
           }
+        } else if (const auto it=alive.find(fd); it!=alive.end()) {
+          // keep-alive socket timed out
+          ::close(fd); // close timer
+          ::close(it->second); // close socket
         } else {
           queue.push(fd);
         }
@@ -89,6 +94,26 @@ void server::loop() noexcept {
       }
     }
   }
+}
+
+void server::keep_alive(int sock, int sec) {
+  struct itimerspec itspec { };
+  ::clock_gettime(CLOCK_REALTIME, &itspec.it_value);
+  itspec.it_value.tv_sec += sec;
+
+  const int timer = ::timerfd_create(CLOCK_REALTIME, TFD_NONBLOCK);
+  if (timer == -1) goto close_socket;
+  if ( ::timerfd_settime(timer,TFD_TIMER_ABSTIME,&itspec,nullptr) == -1
+    || epoll_add(timer)
+  ) goto close_timer_and_socket;
+
+  alive.emplace(timer,sock);
+  return;
+
+close_timer_and_socket:
+  ::close(timer);
+close_socket:
+  ::close(sock);
 }
 
 } // end namespace ivanp

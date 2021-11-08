@@ -6,6 +6,7 @@
 #include <thread>
 #include <iostream>
 #include <utility>
+#include <unordered_map>
 
 #include "socket.hh"
 #include "thread_safe_queue.hh"
@@ -24,6 +25,7 @@ private:
   thread_safe_queue<socket> queue;
   epoll_event* epoll_events;
   const unsigned n_epoll_events;
+  std::unordered_map<int,int> alive; // timer, socket
 
   struct thread_buffer {
     char* m;
@@ -40,7 +42,7 @@ private:
     thread_buffer& operator=(thread_buffer&& o) = delete;
   };
 
-  void epoll_add(int);
+  bool epoll_add(int);
 
 public:
   server(port_t port, unsigned epoll_buffer_size);
@@ -69,6 +71,8 @@ public:
       });
     }
   }
+
+  void keep_alive(int sock, int sec);
 };
 
 } // end namespace ivanp

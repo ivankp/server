@@ -26,10 +26,6 @@ int main(int argc, char* argv[]) {
       if (!req) return;
       INFO("35;1","HTTP");
 
-      bool keep_alive = atof(req.protocol+5) >= 1.1;
-      for (const auto [name,val] : req["Connection"])
-        keep_alive = !strcmp(val,"keep-alive");
-
 #ifndef NDEBUG
       cout << req.method << " /" << req.path << ' ' << req.protocol << '\n';
       for (const auto& [name, val]: req.header)
@@ -117,9 +113,7 @@ int main(int argc, char* argv[]) {
         HTTP_ERROR(501,req.method," method not implemented");
       }
 
-      // must close the socket if not keep-alive
-      if (!keep_alive) sock.close();
-      // TODO: add socket to timed queue if keep-alive
+      sock.close(); // no keep-alive here
       // must close socket on any error
     } catch (const http::error& e) {
       sock << e;
