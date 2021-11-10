@@ -10,12 +10,12 @@ using std::cout;
 using std::endl;
 
 int main(int argc, char* argv[]) {
-  const server::port_t server_port = 8080;
+  const basic_server::port_t server_port = 8080;
   const unsigned nthreads = std::thread::hardware_concurrency();
   const unsigned epoll_nevents = 64;
   const size_t thread_buffer_size = 1<<13;
 
-  server server(server_port,epoll_nevents);
+  server<> server(server_port,epoll_nevents);
   cout << "Listening on port " << server_port <<'\n'<< endl;
 
   server(nthreads, thread_buffer_size,

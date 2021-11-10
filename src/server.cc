@@ -5,7 +5,6 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <sys/epoll.h>
-#include <sys/timerfd.h>
 
 #include "error.hh"
 // #include "debug.hh"
@@ -20,7 +19,7 @@ void nonblock(int fd) {
 
 }
 
-server::server(port_t port, unsigned epoll_buffer_size)
+basic_server::basic_server(port_t port, unsigned epoll_buffer_size)
 : main_socket(PCALLR(socket)(AF_INET, SOCK_STREAM, 0)),
   epoll(PCALLR(epoll_create1)(0)),
   n_epoll_events(epoll_buffer_size)
@@ -43,13 +42,13 @@ server::server(port_t port, unsigned epoll_buffer_size)
 
   epoll_events = new epoll_event[n_epoll_events];
 }
-server::~server() {
+basic_server::~basic_server() {
   ::close(epoll);
   ::close(main_socket);
   delete[] epoll_events;
 }
 
-bool server::epoll_add(int fd) {
+bool basic_server::epoll_add(int fd) {
   epoll_event event {
     .events = EPOLLIN | EPOLLRDHUP | EPOLLET,
     .data = { .fd = fd }
@@ -57,17 +56,17 @@ bool server::epoll_add(int fd) {
   return ::epoll_ctl(epoll,EPOLL_CTL_ADD,fd,&event);
 }
 
-void server::loop() noexcept {
+void basic_server::loop() noexcept {
   for (;;) {
     auto n = PCALLR(epoll_wait)(epoll, epoll_events, n_epoll_events, -1);
     while (n > 0) {
       try {
         const auto& e = epoll_events[--n];
-        socket fd = e.data.fd;
+        int fd = e.data.fd;
 
         const auto flags = e.events;
         if (flags & EPOLLHUP || flags & EPOLLERR || !(flags & EPOLLIN)) {
-          fd.close();
+          ::close(fd);
         } else if (fd == main_socket) {
           for (;;) {
             sockaddr_in addr;
@@ -80,12 +79,11 @@ void server::loop() noexcept {
             }
 
             nonblock(sock);
-            if (epoll_add(sock)) ::close(sock); // TODO: is this ok?
+            if (epoll_add(sock)) {
+              ::close(sock);
+              THROW_ERRNO("epoll_add()");
+            }
           }
-        } else if (const auto it=alive.find(fd); it!=alive.end()) {
-          // keep-alive socket timed out
-          ::close(fd); // close timer
-          ::close(it->second); // close socket
         } else {
           queue.push(fd);
         }
@@ -94,26 +92,6 @@ void server::loop() noexcept {
       }
     }
   }
-}
-
-void server::keep_alive(int sock, int sec) {
-  struct itimerspec itspec { };
-  ::clock_gettime(CLOCK_REALTIME, &itspec.it_value);
-  itspec.it_value.tv_sec += sec;
-
-  const int timer = ::timerfd_create(CLOCK_REALTIME, TFD_NONBLOCK);
-  if (timer == -1) goto close_socket;
-  if ( ::timerfd_settime(timer,TFD_TIMER_ABSTIME,&itspec,nullptr) == -1
-    || epoll_add(timer)
-  ) goto close_timer_and_socket;
-
-  alive.emplace(timer,sock);
-  return;
-
-close_timer_and_socket:
-  ::close(timer);
-close_socket:
-  ::close(sock);
 }
 
 } // end namespace ivanp
