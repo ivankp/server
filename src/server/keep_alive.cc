@@ -3,13 +3,14 @@
 #include <unistd.h>
 #include <sys/timerfd.h>
 
+#include "server.hh"
 #include "error.hh"
 
 namespace ivanp {
 
-// TODO: need mutex
-
 void server_keep_alive::keep_alive(int sock, int sec) {
+  const std::lock_guard lock(mx);
+
   const auto [st,empl] = alive_s2t.emplace(sock,0);
 
   struct itimerspec itspec { };
@@ -41,16 +42,24 @@ close_socket:
 }
 
 bool server_keep_alive::event(int timer) { // timer ran out
+  const std::lock_guard lock(mx);
+
   const auto ts = alive_t2s.find(timer);
   if (ts == alive_t2s.end()) return false; // not this type of event
 
-  // TODO: check if timer has actually run out
+  uint64_t expired = 0;
+  if (::read(timer, &expired, sizeof(expired)) < 0 && errno == EAGAIN)
+    expired = 0;
+  // TODO: is this the right thing to do
+  // to make sure this event didn't fire right before timer was updated?
 
-  ::close(timer);
-  alive_t2s.erase(ts);
-  const int sock = ts->second;
-  ::close(sock);
-  alive_s2t.erase(sock);
+  if (expired != 0) {
+    ::close(timer);
+    alive_t2s.erase(ts);
+    const int sock = ts->second;
+    ::close(sock);
+    alive_s2t.erase(sock);
+  }
   return true;
 }
 

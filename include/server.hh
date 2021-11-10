@@ -13,10 +13,9 @@ struct epoll_event; // <sys/epoll.h>
 
 namespace ivanp {
 
-class basic_server {
-public:
-  using port_t = uint16_t;
+using port_t = uint16_t;
 
+class basic_server {
 protected:
   int main_socket, epoll;
   std::vector<std::thread> threads;

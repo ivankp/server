@@ -11,7 +11,7 @@ using std::cout;
 using std::endl;
 
 int main(int argc, char* argv[]) {
-  const basic_server::port_t server_port = 8080;
+  const port_t server_port = 8080;
   const unsigned nthreads = std::thread::hardware_concurrency();
   const unsigned epoll_nevents = 64;
   const size_t thread_buffer_size = 1<<13;
