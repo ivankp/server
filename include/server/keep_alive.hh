@@ -9,6 +9,7 @@ namespace ivanp {
 class basic_server;
 
 class server_keep_alive {
+  // TODO: optimize dictionary implementation
   std::unordered_map<int,int> alive_t2s; // timer, socket
   std::unordered_map<int,int> alive_s2t; // socket, timer
   std::shared_mutex mx;

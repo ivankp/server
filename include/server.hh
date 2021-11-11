@@ -66,6 +66,8 @@ public:
               worker_function(fd, buffer.m, buffer.size);
           } catch (const std::exception& e) {
             std::cerr << "\033[31;1m" << e.what() << "\033[0m" << std::endl;
+          } catch (...) {
+            std::cerr << "\033[31;1munknown exception\033[0m" << std::endl;
           }
         }
       });

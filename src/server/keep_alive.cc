@@ -22,7 +22,7 @@ void server_keep_alive::keep_alive(int s, int sec) {
   itspec.it_value.tv_sec += sec;
 
   if ( ::timerfd_settime(t,TFD_TIMER_ABSTIME,&itspec,nullptr) == -1
-    || ( empl && base()->epoll_add(t) )
+    || base()->epoll_add(t)
   ) {
     ::close(s);
     ::close(t);
@@ -49,6 +49,7 @@ void server_keep_alive::keep_alive_release(int s) {
 }
 
 // TODO: how to make sure this doesn't close an active socket
+// TODO: need to interface with socket queue
 bool server_keep_alive::event(int t) { // timer ran out
   { std::shared_lock read_lock(mx);
     if (!alive_t2s.contains(t)) return false; // not this type of event
