@@ -25,13 +25,20 @@ int main(int argc, char* argv[]) {
   [&server](socket sock, char* buffer, size_t buffer_size){
     // HTTP *********************************************************
     try {
+      server.keep_alive_release(sock); // remove keep-alive timer
+
       http::request req(sock, buffer, buffer_size);
       if (!req) return;
       INFO("35;1","HTTP");
 
       bool keep_alive = atof(req.protocol+5) >= 1.1;
-      for (const auto [name,val] : req["Connection"])
-        keep_alive = !strcmp(val,"keep-alive");
+      for (const auto [name,val] : req["Connection"]) {
+        if (!strcmp(val,"keep-alive")) keep_alive = true;
+        else if (!strcmp(val,"close")) {
+          keep_alive = false;
+          break;
+        }
+      }
 
 #ifndef NDEBUG
       cout << req.method << " /" << req.path;
@@ -57,8 +64,8 @@ int main(int argc, char* argv[]) {
 
       // https://en.wikipedia.org/wiki/HTTP_persistent_connection
       if (keep_alive) server.keep_alive(sock,10);
-      else sock.close(); // close the socket if not keep-alive
-      // must close socket on any error
+      else sock.close();
+      // must close socket on error
     } catch (const http::error& e) {
       sock << e;
       sock.close();

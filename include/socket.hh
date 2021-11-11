@@ -37,6 +37,11 @@ public:
   void close() const noexcept;
 };
 
+struct unique_socket: socket {
+  using socket::socket;
+  ~unique_socket() { close(); }
+};
+
 } // end namespace ivanp
 
 #endif

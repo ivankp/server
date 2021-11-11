@@ -19,7 +19,7 @@ int main(int argc, char* argv[]) {
   cout << "Listening on port " << server_port <<'\n'<< endl;
 
   server(nthreads, thread_buffer_size,
-  [](socket sock, char* buffer, size_t buffer_size){
+  [](unique_socket sock, char* buffer, size_t buffer_size){
     // HTTP *********************************************************
     try {
       http::request req(sock, buffer, buffer_size, 0, false);
@@ -112,16 +112,11 @@ int main(int argc, char* argv[]) {
       } else {
         HTTP_ERROR(501,req.method," method not implemented");
       }
-
-      sock.close(); // no keep-alive here
-      // must close socket on any error
     } catch (const http::error& e) {
       sock << e;
-      sock.close();
       throw;
     } catch (...) {
       sock << http::status_code(500);
-      sock.close();
       throw;
     }
     // **************************************************************

@@ -2,7 +2,7 @@
 #define IVANP_SERVER_KEEP_ALIVE_HH
 
 #include <unordered_map>
-#include <mutex>
+#include <shared_mutex>
 
 namespace ivanp {
 
@@ -11,7 +11,7 @@ class basic_server;
 class server_keep_alive {
   std::unordered_map<int,int> alive_t2s; // timer, socket
   std::unordered_map<int,int> alive_s2t; // socket, timer
-  std::mutex mx;
+  std::shared_mutex mx;
 
 protected:
   virtual basic_server* base() noexcept = 0;
@@ -21,6 +21,7 @@ protected:
 
 public:
   void keep_alive(int sock, int sec);
+  void keep_alive_release(int sock);
 };
 
 } // end namespace ivanp
