@@ -85,6 +85,7 @@ void basic_server::loop() noexcept {
             }
           }
         } else {
+          // TODO: try to release from mixins before queuing
           queue.push(fd);
         }
       } catch (const std::exception& e) {

@@ -83,7 +83,12 @@ class server final: public basic_server, public Mixins... {
   using basic_server::basic_server;
 
   bool event(int fd) override {
-    return ( Mixins::event(fd) || ... || false );
+    return ( [&]() -> bool {
+      if constexpr (requires { Mixins::event(fd); })
+        return Mixins::event(fd);
+      else
+        return false;
+    }() || ... ); // default is false
   }
 };
 
