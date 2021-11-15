@@ -95,7 +95,8 @@ void send_file(
   socket,
   const char* filename,
   bool gz=false,
-  std::string_view headers={}
+  std::string_view headers={},
+  bool head_only=false
 );
 
 } // end namespace ivanp::http

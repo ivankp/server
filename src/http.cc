@@ -333,7 +333,8 @@ void send_file(
   socket sock,
   const char* filename,
   bool gz,
-  std::string_view headers
+  std::string_view headers,
+  bool head_only
 ) {
   const char* mime = strrchr(filename,'.'); // file extension
   if ( mime)  mime = mimes(mime+1);
@@ -351,7 +352,7 @@ void send_file(
     if (!S_ISREG(sb.st_mode)) ERROR("\"",filename,"\" is not a regular file");
 
     sock << header(mime,sb.st_size);
-    sock.sendfile(fd,sb.st_size);
+    if (!head_only) sock.sendfile(fd,sb.st_size);
 
   } catch (const std::exception& e) {
     HTTP_ERROR(404,e.what());

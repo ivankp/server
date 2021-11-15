@@ -52,12 +52,13 @@ int main(int argc, char* argv[]) {
 #endif
 
       const char* path = req.path;
-      if (!strcmp(req.method,"GET")) { // ===========================
+      if (!strcmp(req.method,"GET") || !strcmp(req.method,"HEAD")) {
         bool gz = req["Accept-Encoding"].q("gzip");
         if (*path=='\0') path = "index.html";
         else http::validate_path(path); // disallow arbitrary paths
-        http::send_file(sock, cat("files/",path).c_str(), gz);
-      // } else if (!strcmp(req.method,"HEAD")) { // ===================
+        http::send_file(
+          sock, cat("files/",path).c_str(), gz, {}, (req.method[0]=='H')
+        );
       } else {
         HTTP_ERROR(501,req.method," method not implemented");
       }
