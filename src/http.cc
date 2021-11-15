@@ -4,8 +4,9 @@
 #include <unordered_map>
 
 #include "whole_file.hh"
+#include "local_fd.hh"
 #include "numconv.hh"
-#include "debug.hh"
+// #include "debug.hh"
 
 namespace ivanp::http {
 namespace {
@@ -322,7 +323,10 @@ void send_str(
 
   // TODO: implement gzip for strings
 
-  sock << http::with_header(mime, data, headers);
+  if (data.size() > (1<<14))
+    sock << header(mime,data.size()) << data;
+  else
+    sock << http::with_header(mime, data, headers);
 }
 
 void send_file(
@@ -331,13 +335,27 @@ void send_file(
   bool gz,
   std::string_view headers
 ) {
-  const char* ext = strrchr(filename,'.');
-  ext = ext ? ext+1 : "";
+  const char* mime = strrchr(filename,'.'); // file extension
+  if ( mime)  mime = mimes(mime+1);
+  if (!mime)  mime = "text/plain; charset=UTF-8";
 
   // TODO: implement file caching
   // TODO: implement gzip for files
 
-  http::send_str(sock, whole_file(filename), gz, ext, headers);
+  // http::send_str(sock, whole_file(filename), gz, ext, headers);
+
+  try {
+    local_fd fd(filename);
+    struct stat sb;
+    if (::fstat(fd,&sb) < 0) THROW_ERRNO("fstat(",filename,")");
+    if (!S_ISREG(sb.st_mode)) ERROR("\"",filename,"\" is not a regular file");
+
+    sock << header(mime,sb.st_size);
+    sock.sendfile(fd,sb.st_size);
+
+  } catch (const std::exception& e) {
+    HTTP_ERROR(404,e.what());
+  }
 }
 
 } // end namespace ivanp::http

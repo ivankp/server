@@ -1,6 +1,8 @@
 #include "socket.hh"
 
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/sendfile.h>
 #include <thread>
 
 #include "error.hh"
@@ -32,6 +34,20 @@ void socket::write(const char* data, size_t size) const {
     }
     data += ret;
     size -= ret;
+  }
+}
+
+void socket::sendfile(int in_fd, size_t size) const {
+  off_t offset = 0;
+  while (size) {
+    const auto sent = ::sendfile(fd, in_fd, &offset, size);
+    if (sent < 0) {
+      if (errno == EAGAIN) {
+        std::this_thread::yield();
+        continue;
+      } else THROW_ERRNO("sendfile()");
+    }
+    size -= sent;
   }
 }
 

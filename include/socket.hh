@@ -34,6 +34,8 @@ public:
 
   size_t read(char* buffer, size_t size) const;
 
+  void sendfile(int fd, size_t size) const;
+
   void close() const noexcept;
 };
 

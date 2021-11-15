@@ -1,0 +1,11 @@
+body {
+  background-color: #E7E7E7;
+}
+
+#main {
+  position: fixed;
+  top: 45%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}

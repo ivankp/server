@@ -4,6 +4,7 @@
 #include "server/keep_alive.hh"
 #include "http.hh"
 #include "error.hh"
+#include "numconv.hh"
 #include "debug.hh"
 
 using namespace ivanp;
@@ -25,12 +26,12 @@ int main(int argc, char* argv[]) {
   [&server](socket sock, char* buffer, size_t buffer_size){
     // HTTP *********************************************************
     try {
-      // TODO: release probably needs to be done in main loop
+      // TODO: release needs to be done in main loop
       server.keep_alive_release(sock); // remove keep-alive timer
 
       http::request req(sock, buffer, buffer_size);
       if (!req) return;
-      INFO("35;1","HTTP");
+      INFO("35;1","socket ",ntos((int)sock));
 
       bool keep_alive = atof(req.protocol+5) >= 1.1;
       for (const auto [name,val] : req["Connection"]) {
@@ -53,12 +54,10 @@ int main(int argc, char* argv[]) {
       const char* path = req.path;
       if (!strcmp(req.method,"GET")) { // ===========================
         bool gz = req["Accept-Encoding"].q("gzip");
-        if (*path=='\0') {
-        } else { // serve any allowed file --------------------------
-          http::validate_path(path); // disallow arbitrary paths
-          http::send_file(sock, cat("files/",path).c_str(), gz);
-        }
-      } else if (!strcmp(req.method,"HEAD")) { // ===================
+        if (*path=='\0') path = "index.html";
+        else http::validate_path(path); // disallow arbitrary paths
+        http::send_file(sock, cat("files/",path).c_str(), gz);
+      // } else if (!strcmp(req.method,"HEAD")) { // ===================
       } else {
         HTTP_ERROR(501,req.method," method not implemented");
       }
