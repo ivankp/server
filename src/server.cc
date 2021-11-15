@@ -7,7 +7,6 @@
 #include <sys/epoll.h>
 
 #include "error.hh"
-// #include "debug.hh"
 
 namespace ivanp {
 namespace {
@@ -65,7 +64,7 @@ void basic_server::loop() noexcept {
         int fd = e.data.fd;
 
         const auto flags = e.events;
-        if (flags & EPOLLHUP || flags & EPOLLERR || !(flags & EPOLLIN)) {
+        if (flags & (EPOLLERR | EPOLLHUP | EPOLLRDHUP) || !(flags & EPOLLIN)) {
           ::close(fd);
         } else if (fd == main_socket) {
           for (;;) {
