@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 #include <sys/epoll.h>
 
+#include "numconv.hh"
 #include "error.hh"
 
 namespace ivanp {
@@ -14,6 +15,31 @@ namespace {
 void nonblock(int fd) {
   PCALL(fcntl)(fd, F_SETFL,
     PCALLR(fcntl)(fd,F_GETFL,0) | O_NONBLOCK);
+}
+
+template <typename T>
+void test_flags(
+  const char* text, T flags, std::initializer_list<std::pair<T,char>> vals
+) {
+  constexpr int n = sizeof(T)*8;
+  char bits[n+1];
+  bits[n] = '\0';
+  T b = 1;
+  for (int i=n; i--; ) {
+    if (flags & b) {
+      bits[i] = '?';
+      for (const auto& [x,c]: vals) {
+        if (x & b) {
+          bits[i] = c;
+          break;
+        }
+      }
+    } else {
+      bits[i] = '.';
+    }
+    b <<= 1;
+  }
+  std::cout << text << bits << std::endl;
 }
 
 }
@@ -64,7 +90,22 @@ void basic_server::loop() noexcept {
         int fd = e.data.fd;
 
         const auto flags = e.events;
+
+        test_flags(cat("fd ",ntos(fd),": ").c_str(),flags,{
+          {EPOLLERR,'E'},
+          {EPOLLHUP,'h'},
+          {EPOLLRDHUP,'H'},
+          {EPOLLET,'T'},
+          {EPOLLIN,'I'},
+          {EPOLLOUT,'O'}
+        });
+        // TODO: Firefox favicon request never completes
+
+        // TODO: https://stackoverflow.com/q/27175281/2640636
+        // TODO: is EPOLLRDHUP handled correctly?
         if (flags & (EPOLLERR | EPOLLHUP | EPOLLRDHUP) || !(flags & EPOLLIN)) {
+          // TODO: can this be the main socket?
+          // TODO: if this is a keep-alive socket need to release it
           ::close(fd);
         } else if (fd == main_socket) {
           for (;;) {

@@ -7,6 +7,8 @@
 
 namespace ivanp {
 
+// TODO: signed may need an extra char
+// TODO: floats
 template <typename T> requires std::is_integral_v<T>
 struct ntos {
   static constexpr unsigned char len = ((616*sizeof(T)) >> 8) + 1;
