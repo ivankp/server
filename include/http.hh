@@ -54,6 +54,15 @@ public:
     const char* value() const noexcept { return ptr->value; }
     const char* name() const noexcept { return ptr->name; }
     float q(const char*) const noexcept;
+
+    operator bool() const noexcept { return n; }
+
+    bool operator==(const char* val) const noexcept {
+      return n==1 && !strcmp(val,value());
+    }
+    bool operator==(std::string_view val) const noexcept {
+      return n==1 && val==value();
+    }
   };
 
   fields operator[](const char* name) const noexcept;
