@@ -76,10 +76,10 @@ int main(int argc, char* argv[]) {
         } else { // send a file
 send_file:
           bool gz = req["Accept-Encoding"].q("gzip");
-          if (*path=='\0') path = "chat.html";
+          if (*path=='\0') path = "index.html";
           else http::validate_path(path); // disallow arbitrary paths
           http::send_file(
-            sock, cat("files/",path).c_str(), gz, {}, (req.method[0]=='H')
+            sock, cat("files/chat/",path).c_str(), gz, {}, (req.method[0]=='H')
           );
         }
       } else if (!strcmp(req.method,"HEAD")) {

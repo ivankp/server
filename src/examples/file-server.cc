@@ -57,7 +57,8 @@ int main(int argc, char* argv[]) {
         if (*path=='\0') path = "index.html";
         else http::validate_path(path); // disallow arbitrary paths
         http::send_file(
-          sock, cat("files/",path).c_str(), gz, {}, (req.method[0]=='H')
+          sock, cat("files/file-server/",path).c_str(), gz, {},
+          req.method[0]=='H'
         );
       } else {
         HTTP_ERROR(501,req.method," method not implemented");
