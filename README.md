@@ -6,7 +6,6 @@
 - Finish websockets
 - Parse GET and POST form data
 - Pipe directly to socket
-- Finish numconv
 
 ## Bring back
 
