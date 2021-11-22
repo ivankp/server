@@ -18,7 +18,15 @@ url_parser::url_parser(const char* url) {
       else if (p==amp) { ++p; continue; }
       const char* eq = reinterpret_cast<const char*>(memchr(p,'=',amp-p));
       auto& vals = params[percent_decode({p,eq?eq:amp})];
-      if (eq) vals.emplace_back(percent_decode({eq+1,amp}));
+      if (eq) {
+        ++eq;
+        for (;;) {
+          const char* pl = reinterpret_cast<const char*>(memchr(eq,'+',amp-eq));
+          vals.emplace_back(percent_decode({eq,pl?pl:amp}));
+          if (!pl) break;
+          eq = pl + 1;
+        }
+      }
       p = amp;
       if (p!=end) ++p;
     }
