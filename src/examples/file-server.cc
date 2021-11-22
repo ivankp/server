@@ -50,13 +50,13 @@ int main(int argc, char* argv[]) {
       cout << req.data << endl;
 #endif
 
-      const char* path = req.path;
       if (!strcmp(req.method,"GET") || !strcmp(req.method,"HEAD")) {
+        const std::string_view path(req.path,strcspn(req.path,"?"));
         try {
-          if (*path=='\0') path = "index.html";
+          if (path.empty()) path = "index.html";
           else validate_path(path); // disallow arbitrary paths
         } catch (const std::exception& e) {
-          HTTP_ERROR(404,e.what());
+          HTTP_ERROR(403,e.what());
         }
         bool gz = req["Accept-Encoding"].q("gzip");
         http::send_file(
