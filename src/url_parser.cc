@@ -75,9 +75,9 @@ void validate_path(std::string_view path) {
   const char* p = path.data();
   const char* const end = p + path.size();
   char c = *p;
-  if (c == '/') ERROR("path \"",path,"\" starts with \'",c,'\'');
+  if (c == '/') ERROR("path \"",path,"\" starts with '/'");
   c = *(end-1);
-  if (c == '/') ERROR("path \"",path,"\" ends with \'",c,'\'');
+  if (c == '/') ERROR("path \"",path,"\" ends with '/'");
   for (; p<end; ++p) {
     c  = *p;
     if (!( // allow only - . / _ 09 AZ az
