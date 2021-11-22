@@ -9,8 +9,21 @@ namespace ivanp {
 url_parser::url_parser(const char* url) {
   const char* p = strchr(url,'?');
   if (p) {
-    path.assign(url,p);
+    path = percent_decode({url,p});
     ++p;
+    const char* const end = p + strlen(p);
+    while (p!=end) {
+      const char* amp = strchr(p,'&');
+      if (!amp) amp = end;
+      else if (p==amp) { ++p; continue; }
+      const char* eq = reinterpret_cast<const char*>(memchr(p,'=',amp-p));
+      auto& vals = params[percent_decode({p,eq?eq:amp})];
+      if (eq) vals.emplace_back(percent_decode({eq+1,amp}));
+      p = amp;
+      if (p!=end) ++p;
+    }
+  } else {
+    path = percent_decode(url);
   }
 }
 

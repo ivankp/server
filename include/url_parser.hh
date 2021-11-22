@@ -10,7 +10,7 @@ namespace ivanp {
 
 struct url_parser {
   std::string path;
-  std::map<std::string,std::vector<std::string>> params;
+  std::map<std::string,std::vector<std::string>,std::less<>> params;
 
   url_parser(const char* url);
 };
