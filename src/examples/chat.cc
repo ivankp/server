@@ -4,6 +4,7 @@
 #include "keep_alive.hh"
 #include "websockets.hh"
 #include "http.hh"
+#include "url_parser.hh"
 #include "error.hh"
 #include "numconv.hh"
 #include "debug.hh"
@@ -59,27 +60,32 @@ int main(int argc, char* argv[]) {
       }
 
 #ifndef NDEBUG
-      cout << req.method << " /" << req.path;
-      if (req.get) cout << '?' << req.get;
-      cout << ' ' << req.protocol << '\n';
+      cout << req.method << " /" << req.path << ' ' << req.protocol << '\n';
       for (const auto& [name, val]: req.header)
         cout << "\033[1m" << name << "\033[0m: " << val << '\n';
       cout << req.data << endl;
 #endif
 
-      const char* path = req.path;
+      const url_parser url(req.path);
+      std::string_view path = url.path;
+
       if (!strcmp(req.method,"GET")) {
-        if (!strcmp(path,"chat")) { // upgrade to websocket
+        if (path == "chat") { // upgrade to websocket
           websocket::handshake(sock, req);
           server.add_websocket(sock);
           return;
         } else { // send a file
 send_file:
+          try {
+            if (path.empty()) path = "index.html";
+            else validate_path(path); // disallow arbitrary paths
+          } catch (const std::exception& e) {
+            HTTP_ERROR(404,e.what());
+          }
           bool gz = req["Accept-Encoding"].q("gzip");
-          if (*path=='\0') path = "index.html";
-          else http::validate_path(path); // disallow arbitrary paths
           http::send_file(
-            sock, cat("files/chat/",path).c_str(), gz, {}, (req.method[0]=='H')
+            sock, cat("files/chat/",path).c_str(), gz, {},
+            req.method[0]=='H'
           );
         }
       } else if (!strcmp(req.method,"HEAD")) {

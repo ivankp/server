@@ -27,12 +27,12 @@ bin/examples/cors-curl: $(patsubst %, .build/%.o, \
 LF_examples/cors-curl := -pthread
 
 bin/examples/file-server: $(patsubst %, .build/%.o, \
-  server socket whole_file http keep_alive \
+  server socket whole_file http url_parser keep_alive \
 )
 LF_examples/file-server := -pthread
 
 bin/examples/chat: $(patsubst %, .build/%.o, \
-  server socket whole_file http base64 keep_alive websockets \
+  server socket whole_file http url_parser base64 keep_alive websockets \
 )
 LF_examples/chat := -pthread
 L_examples/chat := -lcrypto

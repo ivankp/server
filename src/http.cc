@@ -78,8 +78,7 @@ request::request(
   socket sock,
   char* buffer,
   size_t size,
-  size_t max_size,
-  bool split_get
+  size_t max_size
 ) {
   const auto nread = sock.read(buffer,size);
   if (nread == 0) return;
@@ -119,14 +118,7 @@ request::request(
           *d = '\0';
           if (*a!='/') HTTP_ERROR(400,
             "HTTP header: path doesn't start with /");
-          path = ++a;
-          if (split_get) {
-            a = strchr(a,'?');
-            if (a) {
-              *a = '\0';
-              get = a+1;
-            }
-          }
+          path = a+1;
           protocol = d+1;
           if (strncmp(protocol,"HTTP/",5))
             HTTP_ERROR(400,"HTTP header: not HTTP protocol");
@@ -259,29 +251,6 @@ float request::fields::q(const char* x) const noexcept {
     }
   }
   return 0;
-}
-
-void validate_path(const char* path) {
-  if (const char c = *path; c == '/' || c == '\\')
-    HTTP_ERROR(404,"path \"",path,"\" starts with \'",c,'\'');
-  if (const char c = path[strlen(path)-1]; c == '/' || c == '\\')
-    HTTP_ERROR(404,"path \"",path,"\" ends with \'",c,'\'');
-  for (const char* p=path; ; ++p) {
-    if (const char c = *p) {
-      // allow only - . / _ 09 AZ az
-      if (!( ('-'<=c && c<='9') || ('A'<=c && c<='Z')
-          || c=='_' || ('a'<=c && c<='z') )) {
-        HTTP_ERROR(404,"path \"",path,"\" contains \'",c,'\'');
-      } else if (c=='.' && (p==path || *(p-1)=='/')) { // disallow ..
-        while (*++p=='.') { }
-        if (*p=='/' || *p=='\0') {
-          HTTP_ERROR(404,
-            "path \"",path,"\" contains \"",
-            std::string_view((p==path ? p : p-1),(*p ? p+1 : p)),'\"');
-        } else --p;
-      }
-    } else break;
-  }
 }
 
 std::string header(

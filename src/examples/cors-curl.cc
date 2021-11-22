@@ -22,9 +22,8 @@ int main(int argc, char* argv[]) {
   [](unique_socket sock, char* buffer, size_t buffer_size){
     // HTTP *********************************************************
     try {
-      http::request req(sock, buffer, buffer_size, 0, false);
+      http::request req(sock, buffer, buffer_size);
       if (!req) return;
-      INFO("35;1","HTTP");
 
 #ifndef NDEBUG
       cout << req.method << " /" << req.path << ' ' << req.protocol << '\n';

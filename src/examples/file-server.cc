@@ -3,6 +3,7 @@
 #include "server.hh"
 #include "keep_alive.hh"
 #include "http.hh"
+#include "url_parser.hh"
 #include "error.hh"
 #include "numconv.hh"
 #include "debug.hh"
@@ -43,9 +44,7 @@ int main(int argc, char* argv[]) {
       }
 
 #ifndef NDEBUG
-      cout << req.method << " /" << req.path;
-      if (req.get) cout << '?' << req.get;
-      cout << ' ' << req.protocol << '\n';
+      cout << req.method << " /" << req.path << ' ' << req.protocol << '\n';
       for (const auto& [name, val]: req.header)
         cout << "\033[1m" << name << "\033[0m: " << val << '\n';
       cout << req.data << endl;
@@ -53,9 +52,13 @@ int main(int argc, char* argv[]) {
 
       const char* path = req.path;
       if (!strcmp(req.method,"GET") || !strcmp(req.method,"HEAD")) {
+        try {
+          if (*path=='\0') path = "index.html";
+          else validate_path(path); // disallow arbitrary paths
+        } catch (const std::exception& e) {
+          HTTP_ERROR(404,e.what());
+        }
         bool gz = req["Accept-Encoding"].q("gzip");
-        if (*path=='\0') path = "index.html";
-        else http::validate_path(path); // disallow arbitrary paths
         http::send_file(
           sock, cat("files/file-server/",path).c_str(), gz, {},
           req.method[0]=='H'

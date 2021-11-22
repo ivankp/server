@@ -26,7 +26,7 @@ public:
   throw ivanp::http::error(code, IVANP_ERROR_PREF, __VA_ARGS__)
 
 struct request {
-  const char *method { }, *path { }, *get { }, *protocol { };
+  const char *method { }, *path { }, *protocol { };
   struct entry { const char *name, *value; };
   std::vector<entry> header;
   std::string_view data;
@@ -39,8 +39,7 @@ public:
     socket,
     char* buffer,
     size_t size,
-    size_t max_size=0,
-    bool split_get=true
+    size_t max_size=0
   );
   ~request() { delete[] buffer; }
 
@@ -70,8 +69,6 @@ public:
 
   operator bool() const noexcept { return method; }
 };
-
-void validate_path(const char* path);
 
 std::string header(
   std::string_view mime,
