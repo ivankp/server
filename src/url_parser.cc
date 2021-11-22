@@ -7,9 +7,9 @@
 namespace ivanp {
 
 url_parser::url_parser(const char* url) {
-  const char* p = strchr(url,'?');
-  if (p) {
-    path = percent_decode({url,p});
+  const char* p = url + strcspn(url,"?");
+  path = percent_decode({url,p});
+  if (*p) {
     ++p;
     const char* const end = p + strlen(p);
     while (p!=end) {
@@ -30,8 +30,6 @@ url_parser::url_parser(const char* url) {
       p = amp;
       if (p!=end) ++p;
     }
-  } else {
-    path = percent_decode(url);
   }
 }
 
