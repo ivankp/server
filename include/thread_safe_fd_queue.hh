@@ -2,7 +2,7 @@
 #define IVANP_THREAD_SAFE_FD_QUEUE_HH
 
 #include <queue>
-#include <unordered_map>
+#include <vector>
 #include <mutex>
 #include <condition_variable>
 
@@ -10,15 +10,27 @@ namespace ivanp {
 
 class thread_safe_fd_queue {
   std::queue<int> q;
-  std::unordered_map<int,unsigned> u;
+  std::vector<unsigned> u; // fd reference counts
   std::mutex mx;
   std::condition_variable cv;
 
 public:
+  thread_safe_fd_queue(): u(16) { }
+
   void push(int fd) {
     { std::lock_guard lock(mx);
       q.emplace(fd);
-      ++u[fd];
+      const decltype(u)::size_type i = fd;
+      if (u.size() <= i) {
+        int x = fd;
+        x |= x >> 1;
+        x |= x >> 2;
+        x |= x >> 4;
+        x |= x >> 8;
+        x |= x >> 16;
+        u.resize(x+1); // resize to next power of 2
+      }
+      ++u[i];
     }
     cv.notify_all();
   }
@@ -33,11 +45,11 @@ public:
 
   void release(int fd) {
     std::lock_guard lock(mx);
-    if (!--u[fd]) u.erase(fd);
+    --u[fd];
   }
   bool active(int fd) {
     std::lock_guard lock(mx);
-    return u.contains(fd);
+    return u[fd];
   }
 };
 
