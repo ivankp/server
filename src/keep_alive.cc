@@ -33,40 +33,49 @@ void server_keep_alive::keep_alive(int s, int sec) {
   alive_t2s.emplace(t,s);
 }
 
-void server_keep_alive::keep_alive_release(int s) {
+void server_keep_alive::release(int s) { // remove timer
   { std::shared_lock read_lock(mx);
     if (!alive_s2t.contains(s)) return;
   }
   std::unique_lock write_lock(mx);
 
   const auto st = alive_s2t.find(s);
-  if (st == alive_s2t.end()) return;
-  const int t = st->second;
+  if (st != alive_s2t.end()) { // this socket is still timed
+    const int t = st->second; // timer
 
-  ::close(t);
-  alive_s2t.erase(st);
-  alive_t2s.erase(t);
+    ::close(t);
+    alive_s2t.erase(st);
+    alive_t2s.erase(t);
+  }
 }
 
-// TODO: how to make sure this doesn't close an active socket
-// TODO: need to interface with socket queue
-bool server_keep_alive::event(int t) { // timer ran out
+bool server_keep_alive::event(int t) { // check if a timer ran out
   { std::shared_lock read_lock(mx);
     if (!alive_t2s.contains(t)) return false; // not this type of event
   }
   std::unique_lock write_lock(mx);
-  // TODO: check if socket is queued
-  // TODO: if queued, drop timer (even if socket hasn't been given to a thread)
 
   const auto ts = alive_t2s.find(t);
-  if (ts == alive_t2s.end()) return true;
-  const int s = ts->second;
+  if (ts != alive_t2s.end()) { // this is still a keep-alive timer
+    // Check if the timer has actually timed out.
+    // This might have become a different timer while the event was queued.
+    // In that case, release() has been called,
+    // the socket either closed or given a different timer,
+    // and the original timer has been closed.
+    uint64_t ntimeouts = 0;
+    ::read(t,&ntimeouts,sizeof(ntimeouts));
 
-  ::close(s);
-  ::close(t);
-  alive_s2t.erase(s);
-  alive_t2s.erase(ts);
-
+    if (ntimeouts > 0) {
+      const int s = ts->second; // socket
+      if (!base()->is_active_fd(s)) { // socket not in use
+        // a socket in use will be released when release() is called
+        ::close(s);
+        ::close(t);
+        alive_s2t.erase(s);
+        alive_t2s.erase(ts);
+      }
+    }
+  }
   return true;
 }
 

@@ -28,8 +28,6 @@ int main(int argc, char* argv[]) {
     // HTTP *********************************************************
     try {
       INFO("35;1","socket ",ntos((int)sock));
-      // TODO: release needs to be done in main loop
-      server.keep_alive_release(sock); // remove keep-alive timer
 
       http::request req(sock, buffer, buffer_size);
       if (!req) return;
@@ -51,7 +49,7 @@ int main(int argc, char* argv[]) {
 #endif
 
       if (!strcmp(req.method,"GET") || !strcmp(req.method,"HEAD")) {
-        const std::string_view path(req.path,strcspn(req.path,"?"));
+        std::string_view path(req.path,strcspn(req.path,"?"));
         try {
           if (path.empty()) path = "index.html";
           else validate_path(path); // disallow arbitrary paths

@@ -44,8 +44,6 @@ int main(int argc, char* argv[]) {
     // HTTP *********************************************************
     try {
       INFO("35;1","socket ",ntos((int)sock)," http");
-      // TODO: release needs to be done in main loop
-      server.keep_alive_release(sock); // remove keep-alive timer
 
       http::request req(sock, buffer, buffer_size);
       if (!req) return;

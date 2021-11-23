@@ -87,7 +87,7 @@ void basic_server::loop() noexcept {
     while (n > 0) {
       try {
         const auto& e = epoll_events[--n];
-        int fd = e.data.fd;
+        const int fd = e.data.fd;
 
         const auto flags = e.events;
 
@@ -105,7 +105,7 @@ void basic_server::loop() noexcept {
         // TODO: is EPOLLRDHUP handled correctly?
         if (flags & (EPOLLERR | EPOLLHUP | EPOLLRDHUP) || !(flags & EPOLLIN)) {
           // TODO: can this be the main socket?
-          // TODO: if this is a keep-alive socket need to release it
+          release(fd);
           ::close(fd);
         } else if (fd == main_socket) {
           for (;;) {
@@ -125,7 +125,6 @@ void basic_server::loop() noexcept {
             }
           }
         } else {
-          // TODO: try to release from mixins before queuing
           queue.push(fd);
         }
       } catch (const std::exception& e) {

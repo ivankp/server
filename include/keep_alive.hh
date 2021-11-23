@@ -18,11 +18,11 @@ protected:
   virtual basic_server* base() noexcept = 0;
   virtual const basic_server* base() const noexcept = 0;
 
-  bool event(int fd);
+  bool event  (int t);
+  void release(int s);
 
 public:
   void keep_alive(int sock, int sec);
-  void keep_alive_release(int sock);
 };
 
 } // end namespace ivanp

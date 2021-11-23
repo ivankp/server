@@ -7,7 +7,7 @@
 #include <iostream>
 #include <utility>
 
-#include "thread_safe_queue.hh"
+#include "thread_safe_fd_queue.hh"
 
 struct epoll_event; // <sys/epoll.h>
 
@@ -19,7 +19,7 @@ class basic_server {
 protected:
   int main_socket, epoll;
   std::vector<std::thread> threads;
-  thread_safe_queue<int> queue;
+  thread_safe_fd_queue queue;
   epoll_event* epoll_events;
   const unsigned n_epoll_events;
 
@@ -38,7 +38,8 @@ protected:
     thread_buffer& operator=(thread_buffer&& o) = delete;
   };
 
-  virtual bool event(int fd) = 0;
+  virtual bool event  (int fd) = 0;
+  virtual void release(int fd) = 0;
 
 public:
   basic_server(port_t port, unsigned epoll_buffer_size);
@@ -46,6 +47,8 @@ public:
 
   bool epoll_add(int);
   void loop() noexcept;
+
+  bool is_active_fd(int fd) { return queue.active(fd); }
 
   template <typename F>
   void operator()(
@@ -60,15 +63,18 @@ public:
         buffer = thread_buffer(buffer_size)
       ]() mutable {
         for (;;) {
+          const int fd = queue.pop();
           try {
-            const int fd = queue.pop();
-            if (!event(fd))
+            if (!event(fd)) {
+              release(fd);
               worker_function(fd, buffer.m, buffer.size);
+            }
           } catch (const std::exception& e) {
             std::cerr << "\033[31;1m" << e.what() << "\033[0m" << std::endl;
           } catch (...) {
             std::cerr << "\033[31;1munknown exception\033[0m" << std::endl;
           }
+          queue.release(fd);
         }
       });
     }
@@ -89,6 +95,12 @@ class server final: public basic_server, public Mixins... {
       else
         return false;
     }() || ... ); // default is false
+  }
+  void release(int fd) override {
+    ( [&]{
+      if constexpr (requires { Mixins::release(fd); })
+        Mixins::release(fd);
+    }(), ... );
   }
 };
 
