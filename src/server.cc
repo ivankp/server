@@ -118,6 +118,8 @@ void basic_server::loop() noexcept {
               else THROW_ERRNO("accept()");
             }
 
+            // TODO: setsockopt(): SO_RCVTIMEO, SO_SNDTIMEO
+
             nonblock(sock);
             if (epoll_add(sock)) {
               ::close(sock);

@@ -4,26 +4,12 @@
 #include <string_view>
 #include <utility>
 
+#include "int_fd.hh"
+
 namespace ivanp {
 
-class socket {
-protected:
-  int fd = -1;
-
-public:
-  socket() noexcept = default;
-  socket(int fd) noexcept: fd(fd) { }
-  socket& operator=(int fd) noexcept {
-    this->fd = fd;
-    return *this;
-  }
-  socket(const socket&) noexcept = default;
-  socket& operator=(const socket&) noexcept = default;
-
-  bool operator==(int fd) const noexcept { return this->fd == fd; }
-  bool operator!=(int fd) const noexcept { return this->fd != fd; }
-
-  operator int() const noexcept { return fd; }
+struct socket: int_fd {
+  using int_fd::int_fd;
 
   void write(const char* data, size_t size) const;
   void write(std::string_view s) const { write(s.data(),s.size()); }

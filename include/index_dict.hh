@@ -54,8 +54,8 @@ public:
     }
     return m[i];
   }
-  const T& operator[](size_t i) const noexcept {
-    return m[i];
+  T operator[](size_t i) const noexcept {
+    return i<n ? m[i] : T{};
   }
 };
 

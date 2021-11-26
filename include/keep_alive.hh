@@ -1,20 +1,22 @@
 #ifndef IVANP_SERVER_KEEP_ALIVE_HH
 #define IVANP_SERVER_KEEP_ALIVE_HH
 
-#include <unordered_map>
-#include <shared_mutex>
+#include <mutex>
+#include "index_dict.hh"
+#include "int_fd.hh"
 
 namespace ivanp {
 
 class basic_server;
 
 class server_keep_alive {
-  // TODO: optimize dictionary implementation
-  std::unordered_map<int,int> alive_t2s; // timer, socket
-  std::unordered_map<int,int> alive_s2t; // socket, timer
-  std::shared_mutex mx; // TODO: might be faster with regular mutex
+  index_dict<int_fd> alive_t2s; // timer, socket
+  index_dict<int_fd> alive_s2t; // socket, timer
+  std::mutex mx;
 
 protected:
+  server_keep_alive(): alive_t2s(16), alive_s2t(16) { }
+
   virtual basic_server* base() noexcept = 0;
   virtual const basic_server* base() const noexcept = 0;
 
