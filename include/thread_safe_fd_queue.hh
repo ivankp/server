@@ -6,11 +6,13 @@
 #include <mutex>
 #include <condition_variable>
 
+#include "index_dict.hh"
+
 namespace ivanp {
 
 class thread_safe_fd_queue {
   std::queue<int> q;
-  std::vector<unsigned> u; // fd reference counts
+  index_dict<unsigned> u; // fd reference counts
   std::mutex mx;
   std::condition_variable cv;
 
@@ -20,17 +22,7 @@ public:
   void push(int fd) {
     { std::lock_guard lock(mx);
       q.emplace(fd);
-      const decltype(u)::size_type i = fd;
-      if (u.size() <= i) {
-        int x = fd;
-        x |= x >> 1;
-        x |= x >> 2;
-        x |= x >> 4;
-        x |= x >> 8;
-        x |= x >> 16;
-        u.resize(x+1); // resize to next power of 2
-      }
-      ++u[i];
+      ++u[fd];
     }
     cv.notify_all();
   }
