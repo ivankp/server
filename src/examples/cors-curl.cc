@@ -186,6 +186,7 @@ int main(int argc, char* argv[]) {
                   if (n <= 0) break;
                   sock.write(buf,n);
                 }
+                ::free(buf);
 
                 return;
               } else {
