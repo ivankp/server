@@ -17,7 +17,7 @@ int main(int argc, char* argv[]) {
   const port_t server_port = 8080;
   const unsigned nthreads = std::thread::hardware_concurrency();
   const unsigned epoll_nevents = 64;
-  const size_t thread_buffer_size = 1<<13;
+  const size_t thread_buffer_size = 1<<20;
 
   server<> server(server_port,epoll_nevents);
   cout << "Listening on port " << server_port <<'\n'<< endl;
@@ -118,6 +118,7 @@ int main(int argc, char* argv[]) {
           ::close(pipe1[1]); // send EOF
 
           std::string header; // collect response headers
+          header.reserve(1<<12);
           // size_t content_length = 0;
           for (ssize_t nread = 0;;) {
             const ssize_t nread1 = ::read(
@@ -170,23 +171,26 @@ int main(int argc, char* argv[]) {
               ++b;
               if (line.empty()) {
                 header += "Access-Control-Allow-Origin: *\r\n\r\n";
-                header.append(b,end);
-                sock << header;
+                const size_t n = end - b;
+                if (header.capacity()-header.size() > n) {
+                  header.append(b,n);
+                  sock << header;
+                } else {
+                  sock << header;
+                  sock.write(b,n);
+                }
 
                 // send the rest of the file
-                // content_length -= end-b;
+                // content_length -= nread;
                 // if (content_length) {
                 //   sock.sendfile(pipe2[0],content_length,end-b);
                 // }
 
-                const size_t buflen = 1 << 20;
-                char* buf = reinterpret_cast<char*>(::malloc(buflen));
                 for (;;) {
-                  const auto n = ::read(pipe2[0],buf,buflen);
+                  const auto n = ::read( pipe2[0], buffer, buffer_size );
                   if (n <= 0) break;
-                  sock.write(buf,n);
+                  sock.write(buffer,n);
                 }
-                ::free(buf);
 
                 return;
               } else {
