@@ -4,6 +4,8 @@
 #include <string_view>
 #include <utility>
 
+#include <sys/types.h>
+
 #include "int_fd.hh"
 
 namespace ivanp {
@@ -20,7 +22,7 @@ struct socket: int_fd {
 
   size_t read(char* buffer, size_t size) const;
 
-  void sendfile(int fd, size_t size) const;
+  void sendfile(int fd, size_t size, off_t offset=0) const;
 
   void close() const noexcept;
 };

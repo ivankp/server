@@ -41,7 +41,7 @@ public:
   }
   bool active(int fd) {
     std::lock_guard lock(mx);
-    return u[fd];
+    return std::as_const(u)[fd];
   }
 };
 

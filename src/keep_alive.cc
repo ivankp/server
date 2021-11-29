@@ -59,8 +59,8 @@ bool server_keep_alive::event(int t) { // check if a timer ran out
   ::read(t,&ntimeouts,sizeof(ntimeouts));
 
   if (ntimeouts > 0) {
+    // a socket in use will be released when release() is called
     if (!base()->is_active_fd(s)) { // socket not in use
-      // a socket in use will be released when release() is called
       ::close(s);
       ::close(t);
       s = { };

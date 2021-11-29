@@ -108,8 +108,13 @@ inline std::string_view strip(std::string_view s) {
   const auto *a = s.data();
   const auto *b = a + s.size();
   while (a < b && std::isspace(static_cast<unsigned char>(*a))) ++a;
-  while (--b > a && std::isspace(static_cast<unsigned char>(*b))) ;
-  return { a, b+1 };
+  while (a < b) {
+    if (!std::isspace(static_cast<unsigned char>(*--b))) {
+      ++b;
+      break;
+    }
+  }
+  return { a, b };
 }
 [[nodiscard]]
 inline std::string_view lstrip(std::string_view s) {
@@ -122,8 +127,13 @@ inline std::string_view lstrip(std::string_view s) {
 inline std::string_view rstrip(std::string_view s) {
   const auto *a = s.data();
   const auto *b = a + s.size();
-  while (--b > a && std::isspace(static_cast<unsigned char>(*b))) ;
-  return { a, b+1 };
+  while (a < b) {
+    if (!std::isspace(static_cast<unsigned char>(*--b))) {
+      ++b;
+      break;
+    }
+  }
+  return { a, b };
 }
 
 inline void replace_first(
