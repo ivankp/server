@@ -15,7 +15,8 @@ namespace ivanp {
 namespace {
 
 template <typename T>
-void buffread(char*& buff, T& x) {
+[[gnu::always_inline]]
+inline void buffread(char*& buff, T& x) {
   ::memcpy(&x,buff,sizeof(T));
   buff += sizeof(T);
 }
@@ -225,7 +226,8 @@ void send_frame(
     size += 2;
   } else {
     head.len = 127;
-    ::memcpy(buffer-=8,&size,8);
+    uint64_t size2 = size;
+    ::memcpy(buffer-=8,&size2,8);
     size += 8;
   }
   ::memcpy(buffer-=2,&head,2);
