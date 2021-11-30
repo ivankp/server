@@ -35,6 +35,14 @@ public:
     std::lock_guard lock(mx);
     return wss[sock];
   }
+
+  template <typename F>
+  void every_websocket(F&& f) {
+    std::lock_guard lock(mx);
+    const bool* w = wss.data();
+    for (int i=0, n=wss.size(); i<n; ++i)
+      if (w[i]) f(i);
+  }
 };
 
 namespace websocket {

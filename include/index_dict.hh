@@ -57,6 +57,9 @@ public:
   T operator[](size_t i) const noexcept {
     return i<n ? m[i] : T{};
   }
+
+  const size_t size() const noexcept { return n; }
+  const T*     data() const noexcept { return m; }
 };
 
 } // end namespace ivanp

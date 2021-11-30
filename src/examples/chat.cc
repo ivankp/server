@@ -57,8 +57,13 @@ int main(int argc, char* argv[]) {
         }
       }
       if (!len) return;
-      TEST(std::string_view(p,len))
-      ws::send_frame(sock,buffer,buffer_size, "TEST");
+      const char* brk = reinterpret_cast<const char*>(memchr(p,'\0',len));
+      if (brk && p<brk && size_t(brk-p)!=len) {
+        server.every_websocket([=](int w){
+          ws::send_frame(w,buffer,buffer_size,{p,len});
+        });
+      }
+
     } catch (...) {
       // namespace ws = ivanp::websocket;
       // ws::send_frame(sock,buffer,buffer_size, // close frame
