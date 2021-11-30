@@ -2,6 +2,7 @@
 #define IVANP_HTTP_HH
 
 #include <vector>
+#include <algorithm>
 
 #include "socket.hh"
 #include "error.hh"
@@ -61,6 +62,15 @@ public:
     }
     bool operator==(std::string_view val) const noexcept {
       return n==1 && val==value();
+    }
+
+    bool contain(const char* val) const noexcept {
+      return std::find_if(begin(),end(),
+        [&val](const entry& x){ return !strcmp(val,x.value); });
+    }
+    bool contain(std::string_view val) const noexcept {
+      return std::find_if(begin(),end(),
+        [&val](const entry& x){ return val==x.value; });
     }
   };
 

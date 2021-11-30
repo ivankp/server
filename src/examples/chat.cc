@@ -29,14 +29,43 @@ int main(int argc, char* argv[]) {
   [&server](socket sock, char* buffer, size_t buffer_size){
     if (server.is_websocket(sock)) {
     // WebSocket ****************************************************
+    // TODO: unstable if browser refreshes a lot
+    // especially with firefox
     try {
+      namespace ws = ivanp::websocket;
       INFO("35;1","socket ",ntos((int)sock)," websocket");
-      auto frame = websocket::receive_frame(sock,buffer,buffer_size);
-      if (frame.empty()) return;
-      TEST(frame)
-      websocket::send_frame(sock,buffer,buffer_size, "TEST");
+      size_t len = 0;
+      const char* p;
+      for (;;) {
+        auto frame = ws::receive_frame(sock,buffer+len,buffer_size-len);
+        if (frame.opcode == ws::head::close) {
+          ws::send_frame(sock,buffer,buffer_size, // close frame
+            { frame.data(), 2 }, ws::head::close
+          );
+          server.remove_websocket(sock);
+          sock.close();
+          return;
+        }
+        if (frame.fin) {
+          p = len ? buffer : frame.data();
+          len += frame.size();
+          break;
+        } else {
+          memmove(buffer+len,frame.data(),frame.size());
+          len += frame.size();
+          std::this_thread::yield();
+        }
+      }
+      if (!len) return;
+      TEST(std::string_view(p,len))
+      ws::send_frame(sock,buffer,buffer_size, "TEST");
     } catch (...) {
-      // TODO: send response
+      // namespace ws = ivanp::websocket;
+      // ws::send_frame(sock,buffer,buffer_size, // close frame
+      //   "\x03\xEA" /* 1002 */, ws::head::close
+      // );
+      // TODO: sending close message breaks
+      server.remove_websocket(sock);
       sock.close();
       throw;
     }

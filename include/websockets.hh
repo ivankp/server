@@ -1,18 +1,18 @@
 #ifndef IVANP_WEBSOCKET_HH
 #define IVANP_WEBSOCKET_HH
 
-#include <unordered_set>
 #include <shared_mutex>
 
 #include "http.hh"
+#include "index_dict.hh"
 
 namespace ivanp {
 
 class basic_server;
 
 class server_websockets {
-  std::unordered_set<int> wss;
-  std::shared_mutex mx;
+  index_dict<bool> wss;
+  std::mutex mx;
 
 protected:
   virtual basic_server* base() noexcept = 0;
@@ -21,8 +21,20 @@ protected:
   // bool event(int fd);
 
 public:
-  void add_websocket(int sock) { wss.insert(sock); }
-  bool is_websocket(int sock) { return wss.contains(sock); }
+  server_websockets(): wss(16) { }
+
+  void add_websocket(int sock) {
+    std::lock_guard lock(mx);
+    wss[sock] = true;
+  }
+  void remove_websocket(int sock) {
+    std::lock_guard lock(mx);
+    wss[sock] = false;
+  }
+  bool is_websocket(int sock) {
+    std::lock_guard lock(mx);
+    return wss[sock];
+  }
 };
 
 namespace websocket {
@@ -32,7 +44,7 @@ struct head {
 
   type opcode: 4 = 0;
   type rsv   : 3 = 0;
-  type fin   : 1 = 1;
+  type fin   : 1 = 0;
   type len   : 7 = 0;
   type mask  : 1 = 0;
 

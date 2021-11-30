@@ -9,6 +9,8 @@
 #include "numconv.hh"
 #include "debug.hh"
 
+// TODO: Sec-WebSocket-Extensions: permessage-deflate
+
 namespace ivanp {
 namespace {
 
@@ -18,30 +20,36 @@ void buffread(char*& buff, T& x) {
   buff += sizeof(T);
 }
 
+template <bool only=true, typename... T>
+requires ( std::is_same_v<T,char> && ... )
+auto check_header(const http::request& req, const char* name, const T*... x) {
+  const auto fields = req[name];
+  if (!fields) HTTP_ERROR(400,"websocket handshake: missing ",name);
+  if constexpr (sizeof...(x) == 0) {
+    if (fields.size()>1) HTTP_ERROR(400,"multiple values for ",name);
+    return fields.value();
+  } else {
+    if constexpr (only) {
+      for (const auto [name,val] : fields)
+        if (( !strcmp(val,x) || ... )) return;
+    } else {
+      if (( fields.contain(x) && ... )) return;
+    }
+    HTTP_ERROR(400,"websocket handshake: ",name," != ",x...);
+  }
+};
+
 }
 
 namespace websocket {
 
 void handshake(socket sock, const http::request& req) {
-  auto header = [&req](const char* name, const auto*... x) {
-    const auto fields = req[name];
-    if (!fields) HTTP_ERROR(400,"websocket handshake: missing ",name);
-    if constexpr (sizeof...(x) == 0) {
-      if (fields.size()>1) HTTP_ERROR(400,"multiple values for ",name);
-      return fields.value();
-    } else {
-      for (const auto [name,val] : fields)
-        if (( !strcmp(val,x) || ... )) return;
-      HTTP_ERROR(400,"websocket handshake: ",name," != ",x...);
-    }
-  };
-
-  header("Connection","Upgrade");
-  header("Upgrade","websocket");
-  header("Sec-WebSocket-Version");
-  const auto origin = header("Origin");
-  const auto protocol = header("Sec-WebSocket-Protocol");
-  const auto key = header("Sec-WebSocket-Key");
+  check_header<false>(req,"Connection","Upgrade");
+  check_header(req,"Upgrade","websocket");
+  check_header(req,"Sec-WebSocket-Version");
+  const auto origin = check_header(req,"Origin");
+  const auto protocol = check_header(req,"Sec-WebSocket-Protocol");
+  const auto key = check_header(req,"Sec-WebSocket-Key");
   TEST(origin)
   TEST(protocol)
 
@@ -75,27 +83,31 @@ uint16_t frame::code() const noexcept {
 }
 
 frame receive_frame(socket sock, char* buffer, size_t size) {
-  const auto nread = sock.read(buffer,size);
-  if (nread==0) ERROR("empty ws frame");
+  // TODO: find a way to handle most generic situations here
+  size_t nread = 0;
+  try {
+    nread = sock.read(buffer,size);
+  } catch (const std::exception& e) {
+    ERROR(e.what(),", socket ",ntos((int)sock));
+  }
+  if (nread==0) ERROR1("empty ws frame");
   auto frame = parse_frame(buffer,size);
 
   switch (frame.opcode) {
     case head::text:
     case head::bin:
-      break; // proceed normally
+      break;
     case head::close:
       INFO("35;1","closing ws ",ntos((int)sock),", code: ",ntos(frame.code()));
-      // TODO: send response
-      sock.close();
-      return { };
+      break;
     case head::ping:
       INFO("35;1","ping from ",ntos((int)sock));
       send_frame(sock,buffer,size,{},head::pong); // reply with pong
-      return { };
+      break;
     case head::pong:
       INFO("35;1","pong from ",ntos((int)sock));
       send_frame(sock,buffer,size,{},head::ping); // reply with ping
-      return { };
+      break;
   }
 
   return frame;
@@ -128,8 +140,7 @@ frame parse_frame(char* buff, size_t bufflen) {
   buffread(buff,head);
   TEST(unsigned(head.len))
 
-  if (head.fin == 0) ERROR("fin==0 not yet implemented");
-  if (head.rsv != 0) ERROR("rsv!=0 not implemented");
+  if (head.rsv != 0) ERROR1("rsv!=0 not implemented");
 
   if (head.len<126) {
     len = head.len;
@@ -152,7 +163,7 @@ frame parse_frame(char* buff, size_t bufflen) {
   }
   TEST(len)
 
-  if (len > bufflen) ERROR("frame length exceeds buffer length");
+  if (len > bufflen) ERROR1("frame length exceeds buffer length");
 
   if (len) {
     if (head.mask) {
@@ -173,7 +184,7 @@ frame parse_frame(char* buff, size_t bufflen) {
 
       for (uint64_t i=0; i<len; ++i)
         buff[i] ^= mask[i%4];
-    } else ERROR("client sent no mask");
+    } else ERROR1("client sent no mask");
   }
 
   return { head, { buff, len } };
@@ -204,7 +215,7 @@ void send_frame(
     "The message is too long for buffer of size ", ntos(size));
   ::memcpy(buffer += 10, message.data(), size = message.size());
 
-  head head { .opcode = opcode };
+  head head { .opcode = opcode, .fin = 1 };
   if (size<126) {
     head.len = size;
   } else if (size <= (uint16_t)-1) {
