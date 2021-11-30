@@ -42,8 +42,10 @@ const last = xs => xs[xs.length-1];
 document.addEventListener('DOMContentLoaded', () => {
   const in_name = _id('name');
   const in_text = _id('text');
+  const in_send = _id('send');
   in_name.disabled = true;
   in_text.disabled = true;
+  in_send.disabled = true;
 
   const ws = new WebSocket('ws'+window.location.origin.substr(4)+'/chat','chat');
   ws.onopen = function() {
@@ -56,27 +58,33 @@ document.addEventListener('DOMContentLoaded', () => {
         $(txt,'p').textContent = p;
     };
 
+    function send() {
+      const name = in_name.value.trim();
+      const text = in_text.value.trim();
+      if (name.length===0) {
+        in_name.focus();
+        alert('Name must not be empty');
+      } else if (text.length===0) {
+        in_text.focus();
+        alert('Text must not be empty');
+      } else {
+        in_name.value = name;
+        in_text.value = '';
+        ws.send(name+'\0'+text);
+      }
+    }
+
     in_text.addEventListener('keypress',function(e) {
       if (e.keyCode == 13 && e.shiftKey) {
         e.preventDefault();
-        const name = in_name.value.trim();
-        const text = in_text.value.trim();
-        if (name.length===0) {
-          in_name.focus();
-          alert('Name must not be empty');
-        } else if (text.length===0) {
-          in_text.focus();
-          alert('Text must not be empty');
-        } else {
-          in_name.value = name;
-          in_text.value = '';
-          ws.send(name+'\0'+text);
-        }
+        send();
       }
     });
+    in_send.addEventListener('click',send);
 
     in_name.disabled = false;
     in_text.disabled = false;
+    in_send.disabled = false;
     in_name.focus();
   };
 });

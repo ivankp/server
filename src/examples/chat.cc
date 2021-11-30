@@ -14,7 +14,7 @@ using std::cout;
 using std::endl;
 
 int main(int argc, char* argv[]) {
-  const port_t server_port = 8080;
+  const port_t server_port = 12345;
   const unsigned nthreads = std::thread::hardware_concurrency();
   const unsigned epoll_nevents = 64;
   const size_t thread_buffer_size = 1<<13;
@@ -57,6 +57,11 @@ int main(int argc, char* argv[]) {
         }
       }
       if (!len) return;
+      // TEST(len)
+      // for (size_t i=0; i<len; ++i) {
+      //   cout << unsigned(p[i]) << '\n';
+      // }
+      // cout << endl;
       const char* brk = reinterpret_cast<const char*>(memchr(p,'\0',len));
       if (brk && p<brk && size_t(brk-p)!=len) {
         server.every_websocket([=](int w){

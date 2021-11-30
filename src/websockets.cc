@@ -214,7 +214,7 @@ void send_frame(
 
   if (message.size()+10 > size) ERROR(
     "The message is too long for buffer of size ", ntos(size));
-  ::memcpy(buffer += 10, message.data(), size = message.size());
+  ::memmove(buffer += 10, message.data(), size = message.size());
 
   head head { .opcode = opcode, .fin = 1 };
   if (size<126) {
