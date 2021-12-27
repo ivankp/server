@@ -40,8 +40,8 @@ void server_keep_alive::release(int s) { // remove timer
   if (t == -1) return; // not a timed socket
 
   ::close(t);
-  t = { };
-  alive_t2s[t] = { };
+  alive_t2s[t] = -1;
+  t = -1;
 }
 
 bool server_keep_alive::event(int t) { // check if a timer ran out
@@ -63,8 +63,8 @@ bool server_keep_alive::event(int t) { // check if a timer ran out
     if (!base()->is_active_fd(s)) { // socket not in use
       ::close(s);
       ::close(t);
-      s = { };
-      alive_s2t[s] = { };
+      alive_s2t[s] = -1;
+      s = -1;
     }
   }
   return true;

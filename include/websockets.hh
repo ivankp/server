@@ -40,7 +40,7 @@ public:
   void every_websocket(F&& f) {
     std::lock_guard lock(mx);
     const bool* w = wss.data();
-    for (int i=0, n=wss.size(); i<n; ++i)
+    for (size_t i=0, n=wss.size(); i<n; ++i)
       if (w[i]) f(i);
   }
 };

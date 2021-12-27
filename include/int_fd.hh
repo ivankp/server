@@ -13,8 +13,8 @@ public:
     this->fd = fd;
     return *this;
   }
-  int_fd(const int_fd&) noexcept = default;
-  int_fd& operator=(const int_fd&) noexcept = default;
+  // int_fd(const int_fd&) noexcept = default;
+  // int_fd& operator=(const int_fd&) noexcept = default;
   operator int() const noexcept { return fd; }
 };
 
