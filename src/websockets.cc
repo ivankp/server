@@ -44,15 +44,13 @@ auto check_header(const http::request& req, const char* name, const T*... x) {
 
 namespace websocket {
 
-void handshake(socket sock, const http::request& req) {
+void handshake(socket sock, const http::request& req, const char* origin) {
   check_header<false>(req,"Connection","Upgrade");
   check_header(req,"Upgrade","websocket");
   check_header(req,"Sec-WebSocket-Version");
-  const auto origin = check_header(req,"Origin");
+  check_header(req,"Origin",origin);
   const auto protocol = check_header(req,"Sec-WebSocket-Protocol");
   const auto key = check_header(req,"Sec-WebSocket-Key");
-  TEST(origin)
-  TEST(protocol)
 
   auto key2 = cat(key,"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
   char hash[SHA_DIGEST_LENGTH];
@@ -62,7 +60,6 @@ void handshake(socket sock, const http::request& req) {
     reinterpret_cast<unsigned char*>(&hash)
   );
   key2 = base64_encode(hash,SHA_DIGEST_LENGTH);
-  // TEST(key2)
   sock << cat(
     "HTTP/1.1 101 Switching Protocols\r\n"
     "Connection: Upgrade\r\n"
@@ -139,7 +136,6 @@ frame parse_frame(char* buff, size_t bufflen) {
   uint64_t len;
 
   buffread(buff,head);
-  TEST(unsigned(head.len))
 
   if (head.rsv != 0) ERROR1("rsv!=0 not implemented");
 
@@ -162,7 +158,6 @@ frame parse_frame(char* buff, size_t bufflen) {
     for (int i=4; i; ) --i, std::swap(bytes[i],bytes[7-i]);
     len = tmp;
   }
-  TEST(len)
 
   if (len > bufflen) ERROR1("frame length exceeds buffer length");
 

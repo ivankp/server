@@ -15,8 +15,7 @@ using std::endl;
 
 int main(int argc, char* argv[]) {
   const port_t server_port = 12345;
-  // const unsigned nthreads = std::thread::hardware_concurrency();
-  const unsigned nthreads = 1;
+  const unsigned nthreads = std::thread::hardware_concurrency();
   const unsigned epoll_nevents = 64;
   const size_t thread_buffer_size = 1<<13;
 
@@ -28,11 +27,9 @@ int main(int argc, char* argv[]) {
 
   server(nthreads, thread_buffer_size,
   [&server](socket sock, char* buffer, size_t buffer_size){
-    TEST(std::this_thread::get_id())
+    // TEST(std::this_thread::get_id())
     if (server.is_websocket(sock)) {
     // WebSocket ****************************************************
-    // TODO: unstable if browser refreshes a lot
-    // especially with firefox
     try {
       namespace ws = ivanp::websocket;
       INFO("35;1","socket ",ntos((int)sock)," websocket");
@@ -41,7 +38,6 @@ int main(int argc, char* argv[]) {
       for (;;) {
         auto frame = ws::receive_frame(sock,buffer+len,buffer_size-len);
         if (frame.opcode == ws::head::close) {
-          TEST(sock)
           ws::send_frame(sock,buffer,buffer_size, // close frame
             { frame.data(), 2 }, ws::head::close
           );
@@ -59,7 +55,6 @@ int main(int argc, char* argv[]) {
           std::this_thread::yield();
         }
       }
-      TEST(len)
       if (!len) return;
       // TEST(len)
       // for (size_t i=0; i<len; ++i) {
@@ -67,16 +62,14 @@ int main(int argc, char* argv[]) {
       // }
       // cout << endl;
       const char* brk = reinterpret_cast<const char*>(memchr(p,'\0',len));
-      TEST(p)
-      TEST(std::string_view(brk+1,len-(brk+1-p)))
-      // TODO: can't send to all WS like this
-      // if (brk && p<brk && size_t(brk-p)!=len) {
-      //   server.every_websocket([=](int w){
-      //     TEST(w)
-      //     ws::send_frame(w,buffer,buffer_size,{p,len});
-      //   });
-      // }
-      ws::send_frame(sock,buffer,buffer_size,{p,len});
+      if (brk && p<brk && size_t(brk-p)!=len) {
+        // p points inside the buffer
+        // send_frame can invalidate p
+        const std::string msg(p,len);
+        server.every_websocket([&](int w){
+          ws::send_frame(w,buffer,buffer_size,msg);
+        });
+      }
 
     } catch (...) {
       // namespace ws = ivanp::websocket;
@@ -117,7 +110,7 @@ int main(int argc, char* argv[]) {
 
       if (!strcmp(req.method,"GET")) {
         if (path == "chat") { // upgrade to websocket
-          websocket::handshake(sock, req);
+          websocket::handshake(sock, req, "http://localhost:12345");
           server.add_websocket(sock);
           return;
         } else { // send a file

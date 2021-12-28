@@ -65,7 +65,7 @@ struct frame: head, std::string_view {
   uint16_t code() const noexcept;
 };
 
-void handshake(socket, const http::request& req);
+void handshake(socket, const http::request& req, const char* origin);
 frame parse_frame(char* buff, size_t size);
 frame receive_frame(socket, char* buff, size_t size);
 void send_frame(
