@@ -1,11 +1,11 @@
-#ifndef IVANP_THREAD_SAFE_QUEUE_HH
-#define IVANP_THREAD_SAFE_QUEUE_HH
+#ifndef IVAN_THREAD_SAFE_QUEUE_HH
+#define IVAN_THREAD_SAFE_QUEUE_HH
 
 #include <queue>
 #include <mutex>
 #include <condition_variable>
 
-namespace ivanp {
+namespace ivan {
 
 template <typename T>
 class thread_safe_queue {

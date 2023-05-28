@@ -6,65 +6,59 @@ CXX = g++
 CC = gcc
 AS = gcc
 
-CFLAGS := -Wall -O3 -flto -fmax-errors=3 -Iinclude
-# CFLAGS := -Wall -O0 -g -fmax-errors=3 -Iinclude
-CXXFLAGS := -std=c++20 $(CFLAGS)
+CFLAGS := -Wall -O3 -flto
+# CFLAGS := -Wall -Og -g
+CFLAGS += -fmax-errors=3 -Iinclude
+# CFLAGS += -DNDEBUG
+CPPSTD := c++20
 
 # generate .d files during compilation
 DEPFLAGS = -MT $@ -MMD -MP -MF .build/$*.d
 
 FIND_MAIN := \
-  find src -type f -name '*.cc' \
+  find src -type f -regex '.*\.cc?$$' \
   | xargs grep -l '^\s*int\s\+main\s*(' \
-  | sed 's:^src/\(.*\)\.cc$$:bin/\1:'
+  | sed 's:^src/\(.*\)\.c\+$$:bin/\1:'
 EXE := $(shell $(FIND_MAIN))
 
 all: $(EXE)
 
-bin/examples/cors-curl: $(patsubst %, .build/%.o, \
-  server socket whole_file http \
+.build/server.o: CFLAGS += -pthread
+.build/socket.o: CFLAGS += -pthread
+.build/examples/echo_server.o: CFLAGS += -pthread
+.build/server/addr_blacklist.o: CFLAGS += -DSERVER_VERBOSE_BLACKLIST
+
+bin/examples/echo_server: $(patsubst %, .build/%.o, \
+  socket error addr_ip4 \
+  server server/addr_blacklist \
 )
-LF_examples/cors-curl := -pthread
+bin/examples/echo_server: LDFLAGS += -pthread
 
-bin/examples/file-server: $(patsubst %, .build/%.o, \
-  server socket whole_file http url_parser keep_alive \
-)
-LF_examples/file-server := -pthread
-
-bin/examples/chat: $(patsubst %, .build/%.o, \
-  server socket whole_file http url_parser base64 keep_alive websockets \
-)
-LF_examples/chat := -pthread
-L_examples/chat := -lcrypto
-
-#####################################################################
-
-.PRECIOUS: .build/%.o lib/lib%.so
+.PRECIOUS: .build/%.o
 
 bin/%: .build/%.o
 	@mkdir -pv $(dir $@)
-	$(CXX) $(LDFLAGS) $(LF_$*) $(filter %.o,$^) -o $@ $(LDLIBS) $(L_$*)
+	$(CXX) $(LDFLAGS) $(filter %.o,$^) -o $@ $(LDLIBS)
 
-lib/lib%.so:
-	@mkdir -pv $(dir $@)
-	$(CXX) $(LDFLAGS) $(LF_$*) -shared $(filter %.o,$^) -o $@ $(LDLIBS) $(L_$*)
+%.so: .build/%.o
+	$(CXX) $(LDFLAGS) -shared $(filter %.o,$^) -o $@ $(LDLIBS)
 
 .build/%.o: src/%.cc
 	@mkdir -pv $(dir $@)
-	$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(C_$*) -c $(filter %.cc,$^) -o $@
+	$(CXX) -std=$(CPPSTD) $(CFLAGS) $(DEPFLAGS) -c $(filter %.cc,$^) -o $@
 
 .build/%.o: src/%.c
 	@mkdir -pv $(dir $@)
-	$(CC) $(CFLAGS) $(DEPFLAGS) $(C_$*) -c $(filter %.c,$^) -o $@
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c $(filter %.c,$^) -o $@
 
 .build/%.o: src/%.S
 	@mkdir -pv $(dir $@)
-	$(AS) $(C_$*) -c $(filter %.S,$^) -o $@
+	$(AS) $(CFLAGS) -c $(filter %.S,$^) -o $@
 
 -include $(shell [ -d '.build' ] && find .build -type f -name '*.d')
 
 endif ###############################################################
 
 clean:
-	@rm -rfv bin lib .build
+	@rm -frv .build bin
 

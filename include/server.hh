@@ -1,83 +1,77 @@
-#ifndef IVANP_SERVER_HH
-#define IVANP_SERVER_HH
+#ifndef IVAN_SERVER_HH
+#define IVAN_SERVER_HH
 
 #include <cstdint>
-#include <vector>
 #include <thread>
 #include <iostream>
 #include <utility>
+#include <memory>
 
-#include "thread_safe_fd_queue.hh"
+#include "socket.hh"
+#include "thread_safe_queue.hh"
 
 struct epoll_event; // <sys/epoll.h>
 
-namespace ivanp {
+namespace ivan {
 
 using port_t = uint16_t;
 
 class basic_server {
+public:
+  port_t port = 80;
+  unsigned n_threads = std::thread::hardware_concurrency();
+  unsigned n_epoll_events = 64;
+  size_t thread_buffer_size = 1 << 10;
+
 protected:
   int main_socket, epoll;
-  std::vector<std::thread> threads;
-  thread_safe_fd_queue queue;
+  thread_safe_queue<int> queue;
+  std::thread* threads;
   epoll_event* epoll_events;
-  const unsigned n_epoll_events;
+  char* thread_buffers;
 
-  struct thread_buffer {
-    char* m;
-    size_t size;
+  int epoll_add(int);
+  virtual void init();
 
-    explicit thread_buffer(size_t size) noexcept
-    : m(new char[size]), size(size) { }
-    ~thread_buffer() { delete[] m; }
-    thread_buffer() = delete;
-    thread_buffer(const thread_buffer&) = delete;
-    thread_buffer& operator=(const thread_buffer&) = delete;
-    thread_buffer(thread_buffer&& o) noexcept
-    : m(o.m), size(o.size) { o.m = nullptr; o.size = 0; }
-    thread_buffer& operator=(thread_buffer&& o) = delete;
-  };
+  virtual bool accept(uint32_t addr) = 0;
+  virtual bool event (int fd) = 0;
 
-  virtual bool event  (int fd) = 0;
-  virtual void release(int fd) = 0;
-
-public:
-  basic_server(port_t port, unsigned epoll_buffer_size);
-  ~basic_server();
-
-  bool epoll_add(int);
+private:
   void loop() noexcept;
 
-  bool is_active_fd(int fd) { return queue.active(fd); }
+public:
+  ~basic_server();
 
   template <typename F>
   void operator()(
-    unsigned nthreads, size_t buffer_size,
     F&& worker_function
-  ) noexcept {
-    threads.reserve(threads.size()+nthreads);
-    for (unsigned i=0; i<nthreads; ++i) {
-      threads.emplace_back([
+  ) {
+
+    init();
+
+    for (unsigned i=0; i<n_threads; ++i) {
+      std::construct_at(threads+i,[
         this,
         worker_function,
-        buffer = thread_buffer(buffer_size)
+        buffer = thread_buffers + thread_buffer_size*i,
+        buffer_size = thread_buffer_size
       ]() mutable {
         for (;;) {
           const int fd = queue.pop();
           try {
             if (!event(fd)) {
-              release(fd);
-              worker_function(fd, buffer.m, buffer.size);
+              worker_function(fd, buffer, buffer_size);
             }
           } catch (const std::exception& e) {
             std::cerr << "\033[31;1m" << e.what() << "\033[0m" << std::endl;
           } catch (...) {
-            std::cerr << "\033[31;1munknown exception\033[0m" << std::endl;
+            std::cerr << "\033[31;1m" "UNKNOWN EXCEPTION" "\033[0m" << std::endl;
           }
-          queue.release(fd);
         }
       });
     }
+
+    loop();
   }
 };
 
@@ -88,6 +82,23 @@ class server final: public basic_server, public Mixins... {
 
   using basic_server::basic_server;
 
+  void init() override {
+    basic_server::init();
+    ( [&]{
+      if constexpr (requires { Mixins::init(); })
+        Mixins::init();
+    }(), ... );
+  }
+
+  bool accept(uint32_t addr) override {
+    return ( [&]() -> bool {
+      if constexpr (requires { Mixins::accept(addr); })
+        return Mixins::accept(addr);
+      else
+        return true;
+    }() && ... ); // default is true
+  }
+
   bool event(int fd) override {
     return ( [&]() -> bool {
       if constexpr (requires { Mixins::event(fd); })
@@ -96,14 +107,8 @@ class server final: public basic_server, public Mixins... {
         return false;
     }() || ... ); // default is false
   }
-  void release(int fd) override {
-    ( [&]{
-      if constexpr (requires { Mixins::release(fd); })
-        Mixins::release(fd);
-    }(), ... );
-  }
 };
 
-} // end namespace ivanp
+} // end namespace ivan
 
 #endif

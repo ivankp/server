@@ -1,7 +1,7 @@
-#ifndef IVANP_INT_FD_HH
-#define IVANP_INT_FD_HH
+#ifndef IVAN_INT_FD_HH
+#define IVAN_INT_FD_HH
 
-namespace ivanp {
+namespace ivan {
 
 class int_fd {
 protected:
@@ -18,6 +18,6 @@ public:
   operator int() const noexcept { return fd; }
 };
 
-} // end namespace ivanp
+}
 
 #endif

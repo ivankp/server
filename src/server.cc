@@ -1,54 +1,32 @@
 #include "server.hh"
 
+#include <cstdlib>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <sys/epoll.h>
 
-#include "numconv.hh"
+#include <type_traits>
+
 #include "error.hh"
 
-namespace ivanp {
+// #include "debug.hh"
+
+namespace ivan {
 namespace {
 
 void nonblock(int fd) {
   PCALL(fcntl)(fd, F_SETFL,
-    PCALLR(fcntl)(fd,F_GETFL,0) | O_NONBLOCK);
-}
-
-template <typename T>
-void test_flags(
-  const char* text, T flags, std::initializer_list<std::pair<T,char>> vals
-) {
-  constexpr int n = sizeof(T)*8;
-  char bits[n+1];
-  bits[n] = '\0';
-  T b = 1;
-  for (int i=n; i--; ) {
-    if (flags & b) {
-      bits[i] = '?';
-      for (const auto& [x,c]: vals) {
-        if (x & b) {
-          bits[i] = c;
-          break;
-        }
-      }
-    } else {
-      bits[i] = '.';
-    }
-    b <<= 1;
-  }
-  std::cout << text << bits << std::endl;
+    PCALL(fcntl)(fd,F_GETFL,0) | O_NONBLOCK);
 }
 
 }
 
-basic_server::basic_server(port_t port, unsigned epoll_buffer_size)
-: main_socket(PCALLR(socket)(AF_INET, SOCK_STREAM, 0)),
-  epoll(PCALLR(epoll_create1)(0)),
-  n_epoll_events(epoll_buffer_size)
-{
+void basic_server::init() {
+  main_socket = PCALL(socket)(AF_INET, SOCK_STREAM, 0);
+  epoll = PCALL(epoll_create1)(0);
+
   { int val = 1;
     PCALL(setsockopt)(
       main_socket, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
@@ -65,15 +43,36 @@ basic_server::basic_server(port_t port, unsigned epoll_buffer_size)
 
   if (epoll_add(main_socket)) THROW_ERRNO("epoll_add()");
 
-  epoll_events = new epoll_event[n_epoll_events];
+  { // allocate dynamic storage
+    size_t len[] {
+      n_threads * sizeof(std::thread),
+      n_epoll_events * sizeof(epoll_event),
+      n_threads * thread_buffer_size
+    };
+    size_t r = len[0] % alignof(epoll_event);
+    if (r) r = alignof(epoll_event) - r;
+    len[1] += (len[0] += r);
+
+    r = len[1] % 8;
+    if (r) r = 8 - r;
+    len[2] += (len[1] += r);
+
+    char* m = reinterpret_cast<char*>(::malloc( len[std::size(len)-1] ));
+
+    threads = reinterpret_cast<decltype(threads)>(m);
+    epoll_events = reinterpret_cast<decltype(epoll_events)>(m + len[0]);
+    thread_buffers = m + len[1];
+  }
 }
 basic_server::~basic_server() {
   ::close(epoll);
   ::close(main_socket);
-  delete[] epoll_events;
+
+  std::destroy_n(threads,n_threads);
+  ::free(threads);
 }
 
-bool basic_server::epoll_add(int fd) {
+int basic_server::epoll_add(int fd) {
   epoll_event event {
     .events = EPOLLIN | EPOLLRDHUP | EPOLLET,
     .data = { .fd = fd }
@@ -83,7 +82,7 @@ bool basic_server::epoll_add(int fd) {
 
 void basic_server::loop() noexcept {
   for (;;) {
-    auto n = PCALLR(epoll_wait)(epoll, epoll_events, n_epoll_events, -1);
+    auto n = PCALL(epoll_wait)(epoll, epoll_events, n_epoll_events, -1);
     while (n > 0) {
       try {
         const auto& e = epoll_events[--n];
@@ -91,21 +90,12 @@ void basic_server::loop() noexcept {
 
         const auto flags = e.events;
 
-        test_flags(cat("fd ",ntos(fd),": ").c_str(),flags,{
-          {EPOLLERR,'E'},
-          {EPOLLHUP,'h'},
-          {EPOLLRDHUP,'H'},
-          {EPOLLET,'T'},
-          {EPOLLIN,'I'},
-          {EPOLLOUT,'O'}
-        });
         // TODO: Firefox favicon request never completes
 
         // TODO: https://stackoverflow.com/q/27175281/2640636
         // TODO: is EPOLLRDHUP handled correctly?
         if (flags & (EPOLLERR | EPOLLHUP | EPOLLRDHUP) || !(flags & EPOLLIN)) {
           // TODO: can this be the main socket?
-          release(fd);
           ::close(fd);
         } else if (fd == main_socket) {
           for (;;) {
@@ -113,9 +103,26 @@ void basic_server::loop() noexcept {
             socklen_t addr_size = sizeof(addr);
             const int sock = ::accept(
               main_socket, reinterpret_cast<sockaddr*>(&addr), &addr_size);
+
+            // get connection IP address
+            // char addr_buf[16];
+            // inet_ntop(addr.sin_family, &addr.sin_addr, addr_buf, sizeof(addr_buf) );
+
+            // To later get sockaddr_in from socket file descriptor:
+            // getpeername(sock, reinterpret_cast<sockaddr*>(&addr), &addr_size);
+
             if (sock < 0) {
-              if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+              const auto e = errno;
+              if (e == EAGAIN || e == EWOULDBLOCK) break;
               else THROW_ERRNO("accept()");
+            }
+
+            static_assert(
+              std::is_same_v<decltype(addr.sin_addr.s_addr),uint32_t>
+            );
+            if (!accept(addr.sin_addr.s_addr)) {
+              ::close(sock);
+              continue;
             }
 
             // TODO: setsockopt(): SO_RCVTIMEO, SO_SNDTIMEO
@@ -136,4 +143,4 @@ void basic_server::loop() noexcept {
   }
 }
 
-} // end namespace ivanp
+} // end namespace ivan

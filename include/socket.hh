@@ -1,5 +1,5 @@
-#ifndef IVANP_SOCKET_HH
-#define IVANP_SOCKET_HH
+#ifndef IVAN_SOCKET_HH
+#define IVAN_SOCKET_HH
 
 #include <string_view>
 #include <utility>
@@ -8,7 +8,7 @@
 
 #include "int_fd.hh"
 
-namespace ivanp {
+namespace ivan {
 
 struct socket: int_fd {
   using int_fd::int_fd;
@@ -32,6 +32,6 @@ struct unique_socket: socket {
   ~unique_socket() { close(); }
 };
 
-} // end namespace ivanp
+} // end namespace ivan
 
 #endif
