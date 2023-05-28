@@ -21,7 +21,7 @@ public:
   port_t port = 80;
   unsigned n_threads = std::thread::hardware_concurrency();
   unsigned n_epoll_events = 64;
-  size_t thread_buffer_size = 1 << 10;
+  size_t thread_buffer_size = 1 << 20;
 
 protected:
   int main_socket, epoll;

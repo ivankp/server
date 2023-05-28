@@ -1,6 +1,6 @@
 #include "server.hh"
 
-#include <cstdlib>
+#include <cstdlib> // malloc
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/socket.h>

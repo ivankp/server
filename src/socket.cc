@@ -2,7 +2,11 @@
 
 #include <unistd.h>
 #include <sys/sendfile.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+
 #include <thread>
+#include <type_traits>
 
 #include "error.hh"
 
@@ -54,6 +58,16 @@ void socket::sendfile(int in_fd, size_t size, off_t offset) const {
 
 void socket::close() const noexcept {
   ::close(fd);
+}
+
+uint32_t socket::addr() const {
+  sockaddr_in addr;
+  socklen_t addr_size = sizeof(addr);
+  PCALL(getpeername)(fd, reinterpret_cast<sockaddr*>(&addr), &addr_size);
+  static_assert(
+    std::is_same_v<decltype(addr.sin_addr.s_addr),uint32_t>
+  );
+  return addr.sin_addr.s_addr;
 }
 
 } // end namespace ivan

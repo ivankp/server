@@ -1,6 +1,7 @@
 #ifndef IVAN_SOCKET_HH
 #define IVAN_SOCKET_HH
 
+#include <cstdint>
 #include <string_view>
 #include <utility>
 
@@ -25,6 +26,8 @@ struct socket: int_fd {
   void sendfile(int fd, size_t size, off_t offset=0) const;
 
   void close() const noexcept;
+
+  uint32_t addr() const;
 };
 
 struct unique_socket: socket {
