@@ -8,20 +8,23 @@
 #include "debug.hh"
 
 #define HTTP_ERROR(code,MSG) \
-  error(code, IVAN_ERROR_PREF MSG)
+  http_error(sock, code, IVAN_ERROR_PREF MSG)
 #define HTTP_ERROR_CAT(code,...) \
-  error(code, ivan::cat(IVAN_ERROR_PREF, __VA_ARGS__).c_str())
+  http_error(sock, code, ivan::cat(IVAN_ERROR_PREF, __VA_ARGS__).c_str())
 
 namespace ivan {
+namespace {
+
+[[noreturn]]
+void http_error(socket sock, int code, const char* str) {
+  sock << "HTTP/1.1 400 Bad Request\r\n\r\n";
+  throw std::runtime_error(str);
+}
+
+}
 
 void http::init() {
   // TODO: initialize mimes etc
-}
-
-[[noreturn]]
-void http::request::error(int code, const char* str) {
-  sock << "HTTP/1.1 400 Bad Request\r\n\r\n";
-  throw std::runtime_error(str);
 }
 
 http::request::request(socket sock, char* buffer, size_t size) {
@@ -34,6 +37,7 @@ http::request::request(socket sock, char* buffer, size_t size) {
   char *a=buffer, *b=a; // cursors
 
   // parse first line of http request ===============================
+  method = a;
   for (int f=0;;) {
     if (b == end) {
 exceeded_buffer_length:
@@ -43,7 +47,7 @@ bad_header:
     }
     const char c = *b;
     const bool space = c == ' ';
-    if (!space && c != '\r' && c != '\n') { // end of line
+    if (!space && c != '\r' && c != '\n') { // not a delimeter
       ++b;
       continue;
     }

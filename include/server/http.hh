@@ -11,14 +11,10 @@ class http {
 
 public:
   struct request {
-    socket sock;
     char *method{}, *path{}, *protocol{};
 
     request(socket, char* buffer, size_t size);
     ~request() { }
-
-    [[noreturn]]
-    void error(int code, const char*);
   };
 
 protected:
