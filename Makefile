@@ -34,6 +34,12 @@ bin/examples/echo_server: $(patsubst %, .build/%.o, \
 )
 bin/examples/echo_server: LDFLAGS += -pthread
 
+bin/examples/http_server: $(patsubst %, .build/%.o, \
+  socket error addr_ip4 \
+  server server/http \
+)
+bin/examples/http_server: LDFLAGS += -pthread
+
 .PRECIOUS: .build/%.o
 
 bin/%: .build/%.o

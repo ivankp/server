@@ -1,12 +1,14 @@
-#ifndef IVAN_ADDR_BLACKLIST_HH
-#define IVAN_ADDR_BLACKLIST_HH
+#ifndef IVAN_SERVER_ADDR_BLACKLIST_HH
+#define IVAN_SERVER_ADDR_BLACKLIST_HH
 
 #include <cstdint>
 #include <vector>
 
-#include "server.hh"
+// #include "server.hh"
 
 namespace ivan {
+
+class basic_server;
 
 class addr_blacklist {
   std::vector<uint32_t> blacklist;
