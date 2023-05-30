@@ -1,5 +1,6 @@
-#include "server/http.hh"
+#include "http.hh"
 
+#include <algorithm>
 #include <stdexcept>
 
 #include "const_map.hh"
@@ -50,7 +51,8 @@ request::request(socket sock, char* buffer, size_t size) {
 
   // parse first line of http request ===============================
   method = a;
-  for (int f=0;;) {
+  int f = 0;
+  for (;;) {
     if (b == end) {
 exceeded_buffer_length:
       HTTP_ERROR(400,"HTTP header: exceeded buffer length");
@@ -84,10 +86,42 @@ bad_header:
   }
 
   // parse http headers =============================================
-  // char *colon;
-  // for (;;) {
-  //
-  // }
+  headers.reserve(16);
+  char *key = nullptr;
+  for (;;) {
+    if (b == end) goto exceeded_buffer_length;
+    const char c = *b;
+    if (!key && c == ':') { // key
+      // strip white space
+      while (*a == ' ' || *a == '\t') ++a;
+      if (a == b) goto bad_header;
+      char* d = b-1;
+      while (*d == ' ' || *d == '\t') --d;
+      *++d = '\0';
+      key = a;
+      a = ++b;
+    } else if (c == '\n') { // line end, value
+      while (*a == ' ' || *a == '\t') ++a;
+      char* d = b-1;
+      if (d >= a && *d == '\r') --d;
+      if (d < a) { ++b; break; } // blank line indicates end of headers
+      while (*d == ' ' || *d == '\t') --d;
+      d[1] = '\0';
+      headers.push_back({key,a});
+      key = nullptr;
+      if (++b == end) break; // last header but no blank line
+      a = b;
+    } else [[likely]] { // not a delimeter
+      ++b;
+    }
+    // TODO: detect end of headers
+  }
+  std::stable_sort(
+    headers.begin(),
+    headers.end(),
+    [](const auto& a, const auto& b){ return strcmp(a.first,b.first) < 0; }
+  );
+  if (b == end) return; // no body
 
   // parse request body =============================================
 }

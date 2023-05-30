@@ -1,7 +1,7 @@
 #include <iostream>
 
 #include "server.hh"
-#include "server/http.hh"
+#include "http.hh"
 #include "addr_ip4.hh"
 #include "debug.hh"
 
@@ -22,9 +22,14 @@ int main(int argc, char* argv[]) {
       << " from " << addr_ip4(sock.addr())
       << "\033[0m" << endl;
 
-    http::request req(sock,buffer,buffer_size);
+    const http::request req(sock,buffer,buffer_size);
     TEST(req.method)
     TEST(req.path)
     TEST(req.protocol)
+
+    for (const auto& [key,val] : req.headers) {
+      cout << key << ": " << val << '\n';
+    }
+    cout << endl;
   });
 }

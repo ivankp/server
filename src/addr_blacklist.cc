@@ -1,4 +1,4 @@
-#include "server/addr_blacklist.hh"
+#include "addr_blacklist.hh"
 
 #include <algorithm>
 

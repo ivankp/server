@@ -97,6 +97,36 @@ inline bool starts_with(const char* a, const char* b, size_t na) noexcept {
   }
 }
 
+struct chars_less {
+  using is_transparent = void;
+  bool operator()(const char* a, const char* b) const noexcept {
+    return strcmp(a,b) < 0;
+  }
+  template <typename T> requires std::is_class_v<T>
+  bool operator()(const T& a, const char* b) const noexcept {
+    return a < b;
+  }
+  template <typename T> requires std::is_class_v<T>
+  bool operator()(const char* a, const T& b) const noexcept {
+    return a < b;
+  }
+};
+
+struct chars_eq {
+  using is_transparent = void;
+  bool operator()(const char* a, const char* b) const noexcept {
+    return strcmp(a,b) == 0;
+  }
+  template <typename T> requires std::is_class_v<T>
+  bool operator()(const T& a, const char* b) const noexcept {
+    return a == b;
+  }
+  template <typename T> requires std::is_class_v<T>
+  bool operator()(const char* a, const T& b) const noexcept {
+    return a == b;
+  }
+};
+
 } // end namespace ivan
 
 #endif

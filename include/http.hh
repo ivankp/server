@@ -1,6 +1,9 @@
 #ifndef IVAN_SERVER_HTTP_HH
 #define IVAN_SERVER_HTTP_HH
 
+#include <vector>
+#include <utility>
+
 #include "socket.hh"
 
 namespace ivan {
@@ -16,6 +19,7 @@ void error(socket, int code, const char* str);
 
 struct request {
   char *method{}, *path{}, *protocol{};
+  std::vector<std::pair<const char*,const char*>> headers;
 
   request(socket, char* buffer, size_t size);
   ~request() { }

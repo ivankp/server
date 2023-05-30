@@ -23,20 +23,21 @@ EXE := $(shell $(FIND_MAIN))
 
 all: $(EXE)
 
+.build/addr_blacklist.o: CFLAGS += -DSERVER_VERBOSE_BLACKLIST
+
 .build/server.o: CFLAGS += -pthread
 .build/socket.o: CFLAGS += -pthread
 .build/examples/echo_server.o: CFLAGS += -pthread
-.build/server/addr_blacklist.o: CFLAGS += -DSERVER_VERBOSE_BLACKLIST
 
 bin/examples/echo_server: $(patsubst %, .build/%.o, \
   socket error addr_ip4 \
-  server server/addr_blacklist \
+  server addr_blacklist \
 )
 bin/examples/echo_server: LDFLAGS += -pthread
 
 bin/examples/http_server: $(patsubst %, .build/%.o, \
   socket error addr_ip4 \
-  server server/http \
+  server http \
 )
 bin/examples/http_server: LDFLAGS += -pthread
 

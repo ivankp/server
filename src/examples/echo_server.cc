@@ -1,7 +1,7 @@
 #include <iostream>
 
 #include "server.hh"
-#include "server/addr_blacklist.hh"
+#include "addr_blacklist.hh"
 #include "addr_ip4.hh"
 #include "debug.hh"
 
