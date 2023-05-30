@@ -14,9 +14,10 @@ namespace http {
 namespace {
 
 #define HTTP_STATUS_CODE(CODE,V,STR) \
-  { CODE, "HTTP/" V " " #CODE " " STR "\r\n\r\n" }
+  { CODE, "HTTP/" V " " #CODE " " STR "\r\n" }
 
 constexpr auto status_codes = make_const_map<int,std::string_view>({
+  HTTP_STATUS_CODE(200,"1.1","OK"),
   HTTP_STATUS_CODE(400,"1.1","Bad Request"),
   HTTP_STATUS_CODE(401,"1.1","Unauthorized"),
   HTTP_STATUS_CODE(403,"1.1","Forbidden"),
@@ -34,33 +35,32 @@ constexpr auto status_codes = make_const_map<int,std::string_view>({
 
 std::string_view status_code(int code) { return status_codes[code]; }
 
-std::string form_response(
-  std::string_view mime,
+std::string response(
+  int code,
   std::string_view headers,
+  std::string_view mime,
   std::string_view data
 ) {
-  return cat(
-    "HTTP/1.1 200 OK\r\n"
-    "Content-Type: ", mime, "\r\n"
-    "Content-Length: ", data.size(), "\r\n",
-    headers, "\r\n",
-    data
-  );
+  std::string_view response_line = status_codes[code];
+  return data.empty()
+  ? cat(
+      response_line,
+      headers, "\r\n"
+    )
+  : cat(
+      response_line,
+      "Content-Type: ", mime, "\r\n"
+      "Content-Length: ", data.size(), "\r\n",
+      headers, "\r\n",
+      data
+    );
 }
 
 [[noreturn]]
 void throw_error(
-  int code,
-  std::string_view str_ex,
-  std::string_view str_resp
+  std::string_view ex
 ) {
-  std::string_view status_code = status_codes[code];
-  throw http::error(
-    std::string( str_ex ),
-    str_resp.empty()
-    ? std::string( status_code )
-    : cat( ( status_code.remove_suffix(2), status_code ), str_resp )
-  );
+  throw http::error(std::string(ex));
 }
 
 request::request(socket sock, char* buffer, size_t size) {
@@ -78,9 +78,11 @@ request::request(socket sock, char* buffer, size_t size) {
   for (;;) {
     if (b == end) {
 exceeded_buffer_length:
-      HTTP_ERROR(400,"HTTP header: exceeded buffer length");
+      sock << response(400);
+      throw_error( IVAN_ERROR_PREF "HTTP header: exceeded buffer length" );
 bad_header:
-      HTTP_ERROR(400,"HTTP header: bad header");
+      sock << response(400);
+      throw_error( IVAN_ERROR_PREF "HTTP header: bad header" );
     }
     const char c = *b;
     const bool space = c == ' ';
@@ -92,12 +94,16 @@ bad_header:
     if (space == last) goto bad_header;
     if (f) {
       if (!last) {
-        if (a[0] != '/') [[unlikely]]
-          HTTP_ERROR(400,"HTTP header: path doesn't start with /");
+        if (a[0] != '/') [[unlikely]] {
+          sock << response(400);
+          throw_error( IVAN_ERROR_PREF "HTTP header: path doesn't start with /" );
+        }
         path = a+1;
       } else {
-        if (!starts_with(a,"HTTP/")) [[unlikely]]
-          HTTP_ERROR(400,"HTTP header: not HTTP protocol");
+        if (!starts_with(a,"HTTP/")) [[unlikely]] {
+          sock << response(400);
+          throw_error( IVAN_ERROR_PREF "HTTP header: not HTTP protocol" );
+        }
         protocol = a;
       }
     }

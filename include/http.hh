@@ -4,12 +4,10 @@
 #include <vector>
 #include <utility>
 #include <string>
+#include <string_view>
 #include <stdexcept>
 
 #include "socket.hh"
-
-#define HTTP_ERROR(code,MSG) ivan::http::throw_error( \
-  code, IVAN_ERROR_PREF MSG )
 
 namespace ivan {
 
@@ -20,33 +18,35 @@ namespace http {
 std::string_view status_code(int code);
 
 struct error: std::runtime_error {
-  std::string resp;
-
-  error(std::string ex, std::string resp)
-  : std::runtime_error(std::move(ex)), resp(std::move(resp)) { }
-
-  friend socket operator<<(socket sock, const error& e) {
-    return sock << e.resp;
-  }
-
-  [[noreturn]]
-  void throw_base() const {
-    throw *static_cast<const std::runtime_error*>(this);
-  }
+  using std::runtime_error::runtime_error;
 };
 
 [[noreturn]]
 void throw_error(
-  int code,
-  std::string_view str_ex,
-  std::string_view str_resp = { }
+  std::string_view ex
 );
 
-std::string form_response(
-  std::string_view mime,
+std::string response(
+  int code,
   std::string_view headers,
+  std::string_view mime,
   std::string_view data
 );
+inline std::string response(
+  std::string_view headers,
+  std::string_view mime,
+  std::string_view data
+) { return response(200,headers,mime,data); }
+inline std::string response(
+  int code,
+  std::string_view headers
+) { return response(code,headers,{},{}); }
+inline std::string response(
+  std::string_view headers
+) { return response(200,headers); }
+inline std::string response(
+  int code
+) { return response(code,{}); }
 
 class request {
 public:

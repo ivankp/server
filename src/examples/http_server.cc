@@ -4,6 +4,7 @@
 #include "http.hh"
 #include "addr_ip4.hh"
 #include "strings.hh"
+#include "error.hh"
 #include "debug.hh"
 
 using namespace ivan;
@@ -44,23 +45,23 @@ int main(int argc, char* argv[]) {
     cout << endl;
     // --------------------------------------------------------------
 
-    const char* path = req.path;
     if (!strcmp(req.method,"GET")) { // ===========================
-      if (*path=='\0') {
-        sock << http::form_response(
-          "text/html; charset=UTF-8", {},
+      if (*req.path=='\0') {
+        sock << http::response(
+          {},
+          "text/html; charset=UTF-8",
           "<html><body><p>Hello World!</p></body></html>"
         );
-      } else http::throw_error(404,cat("path = \"/",path,'\"'));
+      } else {
+        sock << http::response(404);
+        http::throw_error(cat(IVAN_ERROR_PREF "path = \"/",req.path,'\"'));
+      }
     } else {
-      http::throw_error(405,
-        cat("path = \"/",path,'\"'),
-        "Allow: GET\r\n\r\n"
-      );
+      sock << http::response(405,"Allow: GET\r\n");
+      http::throw_error(cat(IVAN_ERROR_PREF "method = \"/",req.method,'\"'));
     }
-  } catch (const http::error& e) {
-    sock << e;
-    e.throw_base();
+  } catch (const http::error&) { // response has already been handled
+    throw;
   } catch (...) {
     sock << http::status_code(500);
     throw;
