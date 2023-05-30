@@ -15,6 +15,7 @@ namespace ivan {
 size_t socket::read(char* buffer, size_t size) const {
   size_t nread = 0;
   for (;;) {
+    // TODO: don't I need to change buffer pointer passed to read()?
     const auto ret = ::read(fd, buffer, size);
     if (ret < 0) {
       const auto e = errno;

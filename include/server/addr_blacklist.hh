@@ -10,6 +10,8 @@ namespace ivan {
 
 class basic_server;
 
+namespace server_features {
+
 class addr_blacklist {
   std::vector<uint32_t> blacklist;
 
@@ -26,6 +28,7 @@ protected:
   bool accept(uint32_t addr);
 };
 
+}
 }
 
 #endif

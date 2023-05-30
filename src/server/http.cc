@@ -2,32 +2,44 @@
 
 #include <stdexcept>
 
+#include "const_map.hh"
 #include "strings.hh"
 #include "error.hh"
 
 #include "debug.hh"
 
 #define HTTP_ERROR(code,MSG) \
-  http_error(sock, code, IVAN_ERROR_PREF MSG)
+  http::error(sock, code, IVAN_ERROR_PREF MSG)
 #define HTTP_ERROR_CAT(code,...) \
-  http_error(sock, code, ivan::cat(IVAN_ERROR_PREF, __VA_ARGS__).c_str())
+  http::error(sock, code, ivan::cat(IVAN_ERROR_PREF, __VA_ARGS__).c_str())
 
 namespace ivan {
+namespace http {
 namespace {
 
+constexpr auto status_codes = make_const_map<int,const char*>({
+  {400,"HTTP/1.1 400 Bad Request\r\n\r\n"},
+  {401,"HTTP/1.1 401 Unauthorized\r\n\r\n"},
+  {403,"HTTP/1.1 403 Forbidden\r\n\r\n"},
+  {404,"HTTP/1.1 404 Not Found\r\n\r\n"},
+  {405,"HTTP/1.1 405 Method Not Allowed\r\nAllow: GET, POST\r\n\r\n"},
+  {411,"HTTP/1.1 411 Length Required\r\n\r\n"},
+  {413,"HTTP/1.1 413 Payload Too Large\r\n\r\n"},
+  {500,"HTTP/1.1 500 Internal Server Error\r\n\r\n"},
+  {501,"HTTP/1.1 501 Not Implemented\r\n\r\n"}
+});
+
+}
+
+const char* status_code(int code) { return status_codes[code]; }
+
 [[noreturn]]
-void http_error(socket sock, int code, const char* str) {
-  sock << "HTTP/1.1 400 Bad Request\r\n\r\n";
+void error(socket sock, int code, const char* str) {
+  sock << status_codes[code];
   throw std::runtime_error(str);
 }
 
-}
-
-void http::init() {
-  // TODO: initialize mimes etc
-}
-
-http::request::request(socket sock, char* buffer, size_t size) {
+request::request(socket sock, char* buffer, size_t size) {
   const auto nread = sock.read(buffer,size);
   if (nread == 0) return;
 
@@ -47,7 +59,7 @@ bad_header:
     }
     const char c = *b;
     const bool space = c == ' ';
-    if (!space && c != '\r' && c != '\n') { // not a delimeter
+    if (!space && c != '\n') { // not a delimeter
       ++b;
       continue;
     }
@@ -55,28 +67,38 @@ bad_header:
     if (space == last) goto bad_header;
     if (f) (last ? protocol : path) = a;
     ++f;
-    *b = '\0';
-    ++b;
     if (space) {
+      *b = '\0';
+      ++b;
       for (;;) {
         if (b == end) goto exceeded_buffer_length;
         if (*b != ' ') break;
       }
       a = b;
     } else { // line end
-      if (b == end) return;
-      if (c == '\r' && *b == '\n') ++b;
+      b[-(b != a && b[-1]=='\r')] = '\0';
+      if (++b == end) return;
       a = b;
       break;
     }
   }
 
   // parse http headers =============================================
-  if (a != end) {
-    TEST(a)
-  }
+  // char *colon;
+  // for (;;) {
+  //
+  // }
 
   // parse request body =============================================
 }
 
+}
+
+namespace server_features {
+
+void http::init() {
+  // TODO: initialize mimes etc
+}
+
+}
 }

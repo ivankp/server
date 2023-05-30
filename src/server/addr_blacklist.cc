@@ -10,6 +10,7 @@
 // #include "debug.hh"
 
 namespace ivan {
+namespace server_features {
 
 void addr_blacklist::init() {
   // if (!blacklist_filename) return;
@@ -37,4 +38,5 @@ void addr_blacklist::blacklist_addr(uint32_t addr) {
   // TODO: sort
 }
 
+}
 }

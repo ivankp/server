@@ -10,9 +10,10 @@ using std::cout, std::endl;
 
 int main(int argc, char* argv[]) {
   server<
-    http
+    server_features::http
   > server;
   server.port = 8080;
+
   cout << "Listening on port " << server.port <<'\n'<< endl;
 
   server([&server](unique_socket sock, char* buffer, size_t buffer_size){
