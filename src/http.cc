@@ -114,7 +114,6 @@ bad_header:
     } else [[likely]] { // not a delimeter
       ++b;
     }
-    // TODO: detect end of headers
   }
   std::stable_sort(
     headers.begin(),
@@ -124,6 +123,84 @@ bad_header:
   if (b == end) return; // no body
 
   // parse request body =============================================
+}
+
+bool request::fields::operator==(const char* val) const noexcept {
+  return n==1 && !strcmp(val,value());
+}
+bool request::fields::operator==(std::string_view val) const noexcept {
+  return n==1 && val==value();
+}
+
+bool request::fields::contain(const char* val) const noexcept {
+  return std::find_if(begin(),end(),
+    [val](const header_t& x){ return !strcmp(val,x.second); });
+}
+bool request::fields::contain(std::string_view val) const noexcept {
+  return std::find_if(begin(),end(),
+    [val](const header_t& x){ return val==x.second; });
+}
+
+request::fields request::operator[](const char* name) const noexcept {
+  const auto end = headers.end();
+  auto it = std::lower_bound(headers.begin(),end,name,
+    [](const auto& x, auto name) -> bool {
+      return strcmp(x.first,name) < 0;
+    });
+  if (it==end || strcmp(it->first,name)) return { };
+  fields fs { &*it, 1 };
+  while (++it!=end) {
+    if (strcmp(it->first,name)) break;
+    ++fs.n;
+  }
+  return fs;
+}
+request::fields request::operator[](std::string_view name) const noexcept {
+  const auto end = headers.end();
+  auto it = std::lower_bound(headers.begin(),end,name,
+    [](const auto& x, auto name) -> bool {
+      return x.first < name;
+    });
+  if (it==end || it->first != name) return { };
+  fields fs { &*it, 1 };
+  while (++it!=end) {
+    if (it->first != name) break;
+    ++fs.n;
+  }
+  return fs;
+}
+
+double request::fields::q(const char* x) const noexcept {
+  const char *b, *q;
+  for (auto [name,a] : (*this)) {
+    for (char c=*a; c!='\0'; c=*(a=b), ++a) {
+      while ((c=*a)==' ' || c=='\t') ++a;
+      b = a;
+      q = nullptr;
+      while ((c=*b)!='\0' && c!=',') {
+        if (c==';') q = b;
+        ++b;
+      }
+      const char* b2 = q ? q : b;
+      if (b2 > a) {
+        while ((c=*--b2)==' ' || c=='\t') { }
+        ++b2;
+        if (strncmp(a,x,b2-a)) continue;
+        if (!q) return 1;
+        ++q;
+        while ((c=*q)==' ' || c=='\t') ++q;
+        if (c!='q') return 1;
+        ++q;
+        while ((c=*q)==' ' || c=='\t') ++q;
+        if (c!='=') return 1;
+        ++q;
+        while ((c=*q)==' ' || c=='\t') ++q;
+        if (c=='\0' || c==',') return 1;
+        return atof(q);
+      }
+    }
+  }
+  return 0;
 }
 
 }

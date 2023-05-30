@@ -31,5 +31,7 @@ int main(int argc, char* argv[]) {
       cout << key << ": " << val << '\n';
     }
     cout << endl;
+
+    TEST(req["Cookie"].value())
   });
 }
