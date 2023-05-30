@@ -13,6 +13,7 @@ int main(int argc, char* argv[]) {
     server_features::addr_blacklist
   > server;
   server.port = 8080;
+  server.thread_buffer_size = 1 << 10; // 1 kB buffer for testing
 
   cout << "Listening on port " << server.port <<'\n'<< endl;
 
@@ -31,5 +32,11 @@ int main(int argc, char* argv[]) {
 
       if (nread < buffer_size) break;
     }
+
+    // TODO: src/socket.cc:25: read(): Bad file descriptor
+    // TODO: src/socket.cc:67: getpeername(): Bad file descriptor
+
+    // socket socket 5 from 5 from 127.0.0.1
+    // looks like socket is being accepted multiple times
   });
 }

@@ -60,7 +60,7 @@ xtos(T x) -> xtos<T>;
 
 // ------------------------------------------------------------------
 
-#include "error.hh"
+#include "strings.hh"
 
 namespace ivan {
 
@@ -79,13 +79,13 @@ stox(std::string_view s) {
   const auto [p,e] = std::from_chars(s.data(),end,x);
   switch (e) {
     case std::errc::invalid_argument:
-      error("invalid value: \"",s,'\"');
+      throw std::runtime_error(cat("invalid value: \"",s,'\"'));
     case std::errc::result_out_of_range:
-      error("value out-of-range: \"",s,'\"');
+      throw std::runtime_error(cat("value out-of-range: \"",s,'\"'));
     default: ;
   }
   if (const auto r = end-p)
-    error(r," bytes unconverted: \"",s,'\"');
+    throw std::runtime_error(cat(r," bytes unconverted: \"",s,'\"'));
   return x;
 #else
   try {
@@ -107,9 +107,9 @@ stox(std::string_view s) {
       return std::stold (std::string(s));
     }
   } catch (const std::invalid_argument&) {
-    error("invalid value: \"",s,'\"');
+    throw std::runtime_error(cat("invalid value: \"",s,'\"'));
   } catch (const std::out_of_range&) {
-    error("value out-of-range: \"",s,'\"');
+    throw std::runtime_error(cat("value out-of-range: \"",s,'\"'));
   }
 #endif
 

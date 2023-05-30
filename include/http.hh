@@ -3,8 +3,13 @@
 
 #include <vector>
 #include <utility>
+#include <string>
+#include <stdexcept>
 
 #include "socket.hh"
+
+#define HTTP_ERROR(code,MSG) ivan::http::throw_error( \
+  code, IVAN_ERROR_PREF MSG )
 
 namespace ivan {
 
@@ -12,10 +17,36 @@ class basic_server;
 
 namespace http {
 
-const char* status_code(int code);
+std::string_view status_code(int code);
+
+struct error: std::runtime_error {
+  std::string resp;
+
+  error(std::string ex, std::string resp)
+  : std::runtime_error(std::move(ex)), resp(std::move(resp)) { }
+
+  friend socket operator<<(socket sock, const error& e) {
+    return sock << e.resp;
+  }
+
+  [[noreturn]]
+  void throw_base() const {
+    throw *static_cast<const std::runtime_error*>(this);
+  }
+};
 
 [[noreturn]]
-void error(socket, int code, const char* str);
+void throw_error(
+  int code,
+  std::string_view str_ex,
+  std::string_view str_resp = { }
+);
+
+std::string form_response(
+  std::string_view mime,
+  std::string_view headers,
+  std::string_view data
+);
 
 class request {
 public:

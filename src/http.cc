@@ -1,43 +1,66 @@
 #include "http.hh"
 
 #include <algorithm>
-#include <stdexcept>
 
 #include "const_map.hh"
+#include "numconv.hh"
 #include "strings.hh"
 #include "error.hh"
 
 #include "debug.hh"
 
-#define HTTP_ERROR(code,MSG) \
-  http::error(sock, code, IVAN_ERROR_PREF MSG)
-#define HTTP_ERROR_CAT(code,...) \
-  http::error(sock, code, ivan::cat(IVAN_ERROR_PREF, __VA_ARGS__).c_str())
-
 namespace ivan {
 namespace http {
 namespace {
 
-constexpr auto status_codes = make_const_map<int,const char*>({
-  {400,"HTTP/1.1 400 Bad Request\r\n\r\n"},
-  {401,"HTTP/1.1 401 Unauthorized\r\n\r\n"},
-  {403,"HTTP/1.1 403 Forbidden\r\n\r\n"},
-  {404,"HTTP/1.1 404 Not Found\r\n\r\n"},
-  {405,"HTTP/1.1 405 Method Not Allowed\r\nAllow: GET, POST\r\n\r\n"},
-  {411,"HTTP/1.1 411 Length Required\r\n\r\n"},
-  {413,"HTTP/1.1 413 Payload Too Large\r\n\r\n"},
-  {500,"HTTP/1.1 500 Internal Server Error\r\n\r\n"},
-  {501,"HTTP/1.1 501 Not Implemented\r\n\r\n"}
+#define HTTP_STATUS_CODE(CODE,V,STR) \
+  { CODE, "HTTP/" V " " #CODE " " STR "\r\n\r\n" }
+
+constexpr auto status_codes = make_const_map<int,std::string_view>({
+  HTTP_STATUS_CODE(400,"1.1","Bad Request"),
+  HTTP_STATUS_CODE(401,"1.1","Unauthorized"),
+  HTTP_STATUS_CODE(403,"1.1","Forbidden"),
+  HTTP_STATUS_CODE(404,"1.1","Not Found"),
+  HTTP_STATUS_CODE(405,"1.1","Method Not Allowed"), // Allow: GET, POST
+  HTTP_STATUS_CODE(411,"1.1","Length Required"),
+  HTTP_STATUS_CODE(413,"1.1","Payload Too Large"),
+  HTTP_STATUS_CODE(500,"1.1","Internal Server Error"),
+  HTTP_STATUS_CODE(501,"1.1","Not Implemented")
 });
+
+#undef HTTP_STATUS_CODE
 
 }
 
-const char* status_code(int code) { return status_codes[code]; }
+std::string_view status_code(int code) { return status_codes[code]; }
+
+std::string form_response(
+  std::string_view mime,
+  std::string_view headers,
+  std::string_view data
+) {
+  return cat(
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: ", mime, "\r\n"
+    "Content-Length: ", data.size(), "\r\n",
+    headers, "\r\n",
+    data
+  );
+}
 
 [[noreturn]]
-void error(socket sock, int code, const char* str) {
-  sock << status_codes[code];
-  throw std::runtime_error(str);
+void throw_error(
+  int code,
+  std::string_view str_ex,
+  std::string_view str_resp
+) {
+  std::string_view status_code = status_codes[code];
+  throw http::error(
+    std::string( str_ex ),
+    str_resp.empty()
+    ? std::string( status_code )
+    : cat( ( status_code.remove_suffix(2), status_code ), str_resp )
+  );
 }
 
 request::request(socket sock, char* buffer, size_t size) {
@@ -67,7 +90,17 @@ bad_header:
     }
     const bool last = f > 1;
     if (space == last) goto bad_header;
-    if (f) (last ? protocol : path) = a;
+    if (f) {
+      if (!last) {
+        if (a[0] != '/') [[unlikely]]
+          HTTP_ERROR(400,"HTTP header: path doesn't start with /");
+        path = a+1;
+      } else {
+        if (!starts_with(a,"HTTP/")) [[unlikely]]
+          HTTP_ERROR(400,"HTTP header: not HTTP protocol");
+        protocol = a;
+      }
+    }
     ++f;
     if (space) {
       *b = '\0';
