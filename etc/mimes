@@ -8,6 +8,6 @@ svg image/svg+xml
 webp image/webp
 gif image/gif
 png image/png
-jpg image/jpeg
+jpg,jpeg image/jpeg
 ico image/x-icon
 pdf application/pdf

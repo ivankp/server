@@ -9,10 +9,9 @@
 
 #include "socket.hh"
 
+// TODO: put mimes in a separate file
+
 namespace ivan {
-
-class basic_server;
-
 namespace http {
 
 std::string_view status_code(int code);
@@ -88,22 +87,6 @@ public:
 };
 
 }
-
-namespace server_features {
-
-class http {
-public:
-  const char* mimes_file_name = "etc/mimes";
-
-protected:
-  virtual basic_server* base() noexcept = 0;
-  virtual const basic_server* base() const noexcept = 0;
-
-  void init();
-};
-
-}
-
 }
 
 #endif

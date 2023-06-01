@@ -37,7 +37,7 @@ bin/examples/echo_server: LDFLAGS += -pthread
 
 bin/examples/http_server: $(patsubst %, .build/%.o, \
   socket error addr_ip4 \
-  server http \
+  server http file mime \
 )
 bin/examples/http_server: LDFLAGS += -pthread
 

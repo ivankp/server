@@ -7,12 +7,20 @@
 
 #include <sys/types.h>
 
-#include "int_fd.hh"
-
 namespace ivan {
 
-struct socket: int_fd {
-  using int_fd::int_fd;
+class socket {
+protected:
+  int fd = -1;
+
+public:
+  socket() noexcept = default;
+  socket(int fd) noexcept: fd(fd) { }
+  socket& operator=(int fd) noexcept {
+    this->fd = fd;
+    return *this;
+  }
+  operator int() const noexcept { return fd; }
 
   void write(const char* data, size_t size) const;
   void write(std::string_view s) const { write(s.data(),s.size()); }
@@ -30,9 +38,18 @@ struct socket: int_fd {
   uint32_t addr() const;
 };
 
-struct unique_socket: socket {
+class unique_socket: public socket {
+public:
   using socket::socket;
-  ~unique_socket() { close(); }
+
+  unique_socket(unique_socket&& o) noexcept: socket(o.fd) { o.fd = -1; }
+  unique_socket& operator=(unique_socket&& o) noexcept {
+    fd = o.fd;
+    o.fd = -1;
+    return *this;
+  }
+
+  ~unique_socket() { if (fd != -1) close(); }
 };
 
 } // end namespace ivan

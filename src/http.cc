@@ -13,20 +13,20 @@ namespace ivan {
 namespace http {
 namespace {
 
-#define HTTP_STATUS_CODE(CODE,V,STR) \
-  { CODE, "HTTP/" V " " #CODE " " STR "\r\n" }
+#define HTTP_STATUS_CODE(CODE,STR) \
+  { CODE, "HTTP/1.1 " #CODE " " STR "\r\n" }
 
 constexpr auto status_codes = make_const_map<int,std::string_view>({
-  HTTP_STATUS_CODE(200,"1.1","OK"),
-  HTTP_STATUS_CODE(400,"1.1","Bad Request"),
-  HTTP_STATUS_CODE(401,"1.1","Unauthorized"),
-  HTTP_STATUS_CODE(403,"1.1","Forbidden"),
-  HTTP_STATUS_CODE(404,"1.1","Not Found"),
-  HTTP_STATUS_CODE(405,"1.1","Method Not Allowed"), // Allow: GET, POST
-  HTTP_STATUS_CODE(411,"1.1","Length Required"),
-  HTTP_STATUS_CODE(413,"1.1","Payload Too Large"),
-  HTTP_STATUS_CODE(500,"1.1","Internal Server Error"),
-  HTTP_STATUS_CODE(501,"1.1","Not Implemented")
+  HTTP_STATUS_CODE(200,"OK"),
+  HTTP_STATUS_CODE(400,"Bad Request"),
+  HTTP_STATUS_CODE(401,"Unauthorized"),
+  HTTP_STATUS_CODE(403,"Forbidden"),
+  HTTP_STATUS_CODE(404,"Not Found"),
+  HTTP_STATUS_CODE(405,"Method Not Allowed"), // Allow: GET, POST
+  HTTP_STATUS_CODE(411,"Length Required"),
+  HTTP_STATUS_CODE(413,"Payload Too Large"),
+  HTTP_STATUS_CODE(500,"Internal Server Error"),
+  HTTP_STATUS_CODE(501,"Not Implemented")
 });
 
 #undef HTTP_STATUS_CODE
@@ -155,9 +155,10 @@ bad_header:
     }
   }
   std::stable_sort(
-    headers.begin(),
-    headers.end(),
-    [](const auto& a, const auto& b){ return strcmp(a.first,b.first) < 0; }
+    headers.begin(), headers.end(),
+    [](const auto& a, const auto& b){
+      return strcmp(a.first,b.first) < 0;
+    }
   );
   if (b == end) return; // no body
 
@@ -240,14 +241,6 @@ double request::fields::q(const char* x) const noexcept {
     }
   }
   return 0;
-}
-
-}
-
-namespace server_features {
-
-void http::init() {
-  // TODO: initialize mimes etc
 }
 
 }
