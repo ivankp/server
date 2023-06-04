@@ -1,6 +1,5 @@
 #include "mime.hh"
 
-#include <tuple>
 #include <algorithm>
 #include <cstring>
 #include <cstdlib>
@@ -12,8 +11,7 @@
 namespace ivan {
 
 mime_dict::mime_dict(const char* filename) {
-  size_t size;
-  std::tie(m,size) = read_whole_file(filename,true);
+  const auto [m,size] = read_whole_file(filename,true);
   try {
     dict.reserve(8);
 
@@ -46,7 +44,7 @@ mime_dict::mime_dict(const char* filename) {
         }
       } else { // value
         for (;;) {
-          // requires one more byte then file size allocated
+          // requires one more byte than file size allocated
           if (b == end || *b == '\n') {
             const char *const val = a;
             a = b + 1;
@@ -77,6 +75,7 @@ done:
     ::free(m);
     throw;
   }
+  this->m = m;
 }
 mime_dict::~mime_dict() { ::free(m); }
 
