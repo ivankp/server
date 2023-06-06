@@ -18,9 +18,9 @@ file::~file() { ::close(fd); }
 regular_file::regular_file(const char* name): file(name) {
   struct stat sb;
   PCALL(fstat)(fd,&sb);
-  if (!S_ISREG(sb.st_mode)) throw std::runtime_error(cat(
-    IVAN_ERROR_PREF "\"", name, "\": not a regular file"
-  ));
+  if (!S_ISREG(sb.st_mode)) THROW_ERROR_CAT(
+    "\"", name, "\": not a regular file"
+  );
   size = (size_t)sb.st_size;
 }
 

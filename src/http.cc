@@ -7,7 +7,7 @@
 #include "strings.hh"
 #include "error.hh"
 
-#include "debug.hh"
+// #include "debug.hh"
 
 namespace ivan {
 namespace http {
@@ -57,70 +57,74 @@ std::string response(
 }
 
 [[noreturn]]
-void throw_error(
-  std::string_view ex
-) {
-  throw http::error(std::string(ex));
+void throw_error(std::string_view s) {
+  throw http::error(std::string(s));
 }
 
 request::request(socket sock, char* buffer, size_t size) {
   const auto nread = sock.read(buffer,size);
   if (nread == 0) return;
 
-  std::cout << std::string_view(buffer,nread) << std::endl;
+  // std::cout << std::string_view(buffer,nread) << std::endl;
 
   const char* const end = buffer + nread;
   char *a=buffer, *b=a; // cursors
 
   // parse first line of http request ===============================
   method = a;
-  int f = 0;
-  for (;;) {
+  bool d = false;
+  for (;; ++b) {
     if (b == end) {
-exceeded_buffer_length:
+unexpected_end:
       sock << response(400);
-      throw_error( IVAN_ERROR_PREF "HTTP header: exceeded buffer length" );
+      throw_error( IVAN_ERROR_PREF "HTTP header: unexpected end" );
 bad_header:
       sock << response(400);
       throw_error( IVAN_ERROR_PREF "HTTP header: bad header" );
     }
     const char c = *b;
-    const bool space = c == ' ';
-    if (!space && c != '\n') { // not a delimeter
-      ++b;
+    if (c == '\r') {
       continue;
-    }
-    const bool last = f > 1;
-    if (space == last) goto bad_header;
-    if (f) {
-      if (!last) {
-        if (a[0] != '/') [[unlikely]] {
-          sock << response(400);
-          throw_error( IVAN_ERROR_PREF "HTTP header: path doesn't start with /" );
-        }
-        path = a+1;
-      } else {
-        if (!starts_with(a,"HTTP/")) [[unlikely]] {
-          sock << response(400);
-          throw_error( IVAN_ERROR_PREF "HTTP header: not HTTP protocol" );
-        }
-        protocol = a;
+    } else if (c == '\n') { // line end
+      if (!path || path == a) [[unlikely]] goto bad_header;
+      if (!starts_with(a,"HTTP/")) [[unlikely]] {
+        sock << response(400);
+        throw_error( IVAN_ERROR_PREF "HTTP header: not HTTP protocol" );
       }
-    }
-    ++f;
-    if (space) {
-      *b = '\0';
-      ++b;
-      for (;;) {
-        if (b == end) goto exceeded_buffer_length;
-        if (*b != ' ') break;
+      protocol = a;
+      for (;;) { // skip intermediate spaces
+        const char c = *--a;
+        if (!(c == ' ' || c == '\t')) break;
       }
-      a = b;
-    } else { // line end
-      b[-(b != a && b[-1]=='\r')] = '\0';
-      if (++b == end) return;
-      a = b;
+      a[1] = '\0';
+      a = b+1;
+      --b;
+      if (*b == '\r') --b;
+      for (;;) { // skip trailing spaces
+        const char c = *b;
+        if (!(c == ' ' || c == '\t')) break;
+        --b;
+      }
+      b[1] = '\0';
+      b = a;
       break;
+    } else if (c == ' ' || c == '\t') { // delimeter
+      if (!d) {
+        d = true;
+        if (!path) *b = '\0';
+      }
+    } else [[likely]] {
+      if (d) {
+        d = false;
+        a = b;
+        if (!path) {
+          if (*a != '/') [[unlikely]] {
+            sock << response(400);
+            throw_error( IVAN_ERROR_PREF "HTTP header: path doesn't start with /" );
+          }
+          path = a+1;
+        }
+      }
     }
   }
 
@@ -128,7 +132,7 @@ bad_header:
   headers.reserve(16);
   char *key = nullptr;
   for (;;) {
-    if (b == end) goto exceeded_buffer_length;
+    if (b == end) goto unexpected_end;
     const char c = *b;
     if (!key && c == ':') { // key
       // strip white space
@@ -156,13 +160,12 @@ bad_header:
   }
   std::stable_sort(
     headers.begin(), headers.end(),
-    [](const auto& a, const auto& b){
-      return strcmp(a.first,b.first) < 0;
-    }
+    [](const auto& a, const auto& b){ return strcmp(a.first,b.first) < 0; }
   );
   if (b == end) return; // no body
 
   // parse request body =============================================
+  // TODO: parse body. POST
 }
 
 bool request::fields::operator==(const char* val) const noexcept {
@@ -183,10 +186,10 @@ bool request::fields::contain(std::string_view val) const noexcept {
 
 request::fields request::operator[](const char* name) const noexcept {
   const auto end = headers.end();
-  auto it = std::lower_bound(headers.begin(),end,name,
-    [](const auto& x, auto name) -> bool {
-      return strcmp(x.first,name) < 0;
-    });
+  auto it = std::lower_bound(
+    headers.begin(), end, name,
+    [](const auto& x, auto name) -> bool { return strcmp(x.first,name) < 0; }
+  );
   if (it==end || strcmp(it->first,name)) return { };
   fields fs { &*it, 1 };
   while (++it!=end) {
@@ -197,10 +200,10 @@ request::fields request::operator[](const char* name) const noexcept {
 }
 request::fields request::operator[](std::string_view name) const noexcept {
   const auto end = headers.end();
-  auto it = std::lower_bound(headers.begin(),end,name,
-    [](const auto& x, auto name) -> bool {
-      return x.first < name;
-    });
+  auto it = std::lower_bound(
+    headers.begin(), end, name,
+    [](const auto& x, auto name) -> bool { return x.first < name; }
+  );
   if (it==end || it->first != name) return { };
   fields fs { &*it, 1 };
   while (++it!=end) {

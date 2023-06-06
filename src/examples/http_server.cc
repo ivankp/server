@@ -5,6 +5,7 @@
 #include "server.hh"
 #include "http.hh"
 #include "mime.hh"
+#include "url.hh"
 #include "addr_ip4.hh"
 #include "strings.hh"
 #include "error.hh"
@@ -79,7 +80,7 @@ int main(int argc, char* argv[]) {
       }
     } else {
       sock << http::response(405,"Allow: GET\r\n");
-      http::throw_error(cat(IVAN_ERROR_PREF "method = \"/",req.method,'\"'));
+      http::throw_error(cat(IVAN_ERROR_PREF "method = \"",req.method,'\"'));
     }
   } catch (const http::error&) { // response has already been handled
     throw;

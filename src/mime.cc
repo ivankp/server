@@ -29,9 +29,7 @@ mime_dict::mime_dict(const char* filename) {
       b = a;
       if (key) { // key
         for (;;) {
-          if (b == end) throw std::runtime_error(
-            IVAN_ERROR_PREF "unexpected file end"
-          );
+          if (b == end) THROW_ERROR("unexpected file end");
           const char c = *b;
           const bool space = c==' ' || c=='\t';
           if (space || c==',' || c=='\n') {

@@ -9,8 +9,6 @@
 
 #include "socket.hh"
 
-// TODO: put mimes in a separate file
-
 namespace ivan {
 namespace http {
 
@@ -31,18 +29,22 @@ std::string response(
   std::string_view mime,
   std::string_view data
 );
+
 inline std::string response(
   std::string_view headers,
   std::string_view mime,
   std::string_view data
 ) { return response(200,headers,mime,data); }
+
 inline std::string response(
   int code,
   std::string_view headers
 ) { return response(code,headers,{},{}); }
+
 inline std::string response(
   std::string_view headers
 ) { return response(200,headers); }
+
 inline std::string response(
   int code
 ) { return response(code,{}); }
