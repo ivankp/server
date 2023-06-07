@@ -29,22 +29,39 @@ std::string response(
   std::string_view mime,
   std::string_view data
 );
-
 inline std::string response(
   std::string_view headers,
   std::string_view mime,
   std::string_view data
 ) { return response(200,headers,mime,data); }
-
 inline std::string response(
+  std::string_view mime,
+  std::string_view data
+) { return response(200,{},mime,data); }
+
+std::string response(
+  int code,
+  std::string_view headers,
+  std::string_view mime,
+  size_t size
+);
+inline std::string response(
+  std::string_view headers,
+  std::string_view mime,
+  size_t size
+) { return response(200,headers,mime,size); }
+inline std::string response(
+  std::string_view mime,
+  size_t size
+) { return response(200,{},mime,size); }
+
+std::string response(
   int code,
   std::string_view headers
-) { return response(code,headers,{},{}); }
-
+);
 inline std::string response(
   std::string_view headers
 ) { return response(200,headers); }
-
 inline std::string response(
   int code
 ) { return response(code,{}); }

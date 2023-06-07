@@ -51,13 +51,16 @@ int main(int argc, char* argv[]) {
     cout << endl;
     // --------------------------------------------------------------
 
-    if (!strcmp(req.method,"GET")) { // ===========================
+    if (!strcmp(req.method,"GET") || !strcmp(req.method,"HEAD")) {
+      const bool GET = req.method[0] == 'G';
       if (*req.path=='\0') {
-        sock << http::response(
-          {},
-          html_mime,
-          "<html><body><p>Hello World!</p></body></html>"
-        );
+        std::string_view html =
+          "<html><body><p>Hello World!</p></body></html>";
+        if (GET) {
+          sock << http::response(html_mime, html);
+        } else {
+          sock << http::response(html_mime, html.size());
+        }
       } else if (!strcmp(req.path,"headers")) {
         std::stringstream ss;
         ss << "<html><body><table>";
@@ -69,11 +72,11 @@ int main(int argc, char* argv[]) {
              << "</pre></td></tr>";
         }
         ss << "</table></body></html>";
-        sock << http::response(
-          {},
-          html_mime,
-          ss.str()
-        );
+        if (GET) {
+          sock << http::response(html_mime, ss.str());
+        } else {
+          sock << http::response(html_mime, ss.str().size());
+        }
       } else {
         sock << http::response(404);
         http::throw_error(cat(IVAN_ERROR_PREF "path = \"/",req.path,'\"'));

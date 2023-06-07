@@ -41,19 +41,37 @@ std::string response(
   std::string_view mime,
   std::string_view data
 ) {
-  std::string_view response_line = status_codes[code];
-  return data.empty()
-  ? cat(
-      response_line,
-      headers, "\r\n"
-    )
-  : cat(
-      response_line,
-      "Content-Type: ", mime, "\r\n"
-      "Content-Length: ", data.size(), "\r\n",
-      headers, "\r\n",
-      data
-    );
+  return cat(
+    status_codes[code],
+    "Content-Type: ", mime, "\r\n"
+    "Content-Length: ", data.size(), "\r\n",
+    headers, "\r\n",
+    data
+  );
+}
+
+std::string response(
+  int code,
+  std::string_view headers,
+  std::string_view mime,
+  size_t size
+) {
+  return cat(
+    status_codes[code],
+    "Content-Type: ", mime, "\r\n"
+    "Content-Length: ", size, "\r\n",
+    headers, "\r\n"
+  );
+}
+
+std::string response(
+  int code,
+  std::string_view headers
+) {
+  return cat(
+    status_codes[code],
+    headers, "\r\n"
+  );
 }
 
 [[noreturn]]
