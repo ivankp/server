@@ -65,12 +65,12 @@ int main(int argc, char* argv[]) {
     // --------------------------------------------------------------
 
     if (!strcmp(req.method,"GET") || !strcmp(req.method,"HEAD")) {
+      const bool GET = req.method[0] == 'G';
       char* q = split_query(req.path);
       if (q) TEST(q)
       validate_path(req.path);
       char* path = req.path+1; // skip leading slash
 
-      const bool GET = req.method[0] == 'G';
       if (*path=='\0') {
         std::string_view html =
           "<html><body><p>Hello World!</p></body></html>";
@@ -114,6 +114,9 @@ int main(int argc, char* argv[]) {
   } catch (const std::exception& e) {
     sock << http::status_code(500);
     log(addr,e.what());
+    throw;
+  } catch (...) {
+    sock << http::status_code(500);
     throw;
   }
   });

@@ -1,7 +1,6 @@
 #include "error.hh"
 #include "http.hh"
 
-// TODO: redo validation
 // TODO: parse % encoding
 // TODO: parse query params
 
@@ -16,7 +15,7 @@ char* split_query(char* path) {
 void validate_path(char* path) {
   // request parser doesn't allow empty paths
   // but doesn't check for \0 in path
-  // split_query(path) with path == "?a" would make path empty
+  // split_query(path) with path == "?..." would make path empty
   if (!path || !path[0]) http::throw_error(
     http::response(400),
     IVAN_ERROR_PREF "empty path"

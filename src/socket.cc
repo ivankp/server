@@ -23,8 +23,11 @@ size_t socket::read(char* buffer, size_t size) const {
         std::this_thread::yield();
         continue;
       } else THROW_ERRNO("read()");
-    } else return nread += ret;
+    } else return nread += ret; // TODO: return after the first read?
   }
+  // TODO: need to make sure whole message is read even on slow connection
+  // before this function returns
+  // TODO: close socket if connection is too slow
   return nread;
 }
 

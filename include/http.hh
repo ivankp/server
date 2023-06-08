@@ -69,7 +69,8 @@ inline std::string response(
 
 class request {
 public:
-  char *method{}, *path{}, *protocol{};
+  char *method{}, *path{}, *protocol{}, *body{};
+  size_t body_size = 0;
   using header_t = std::pair<const char*,const char*>;
   std::vector<header_t> headers;
 

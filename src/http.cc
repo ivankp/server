@@ -182,8 +182,14 @@ bad_header:
   );
   if (b == end) return; // no body
 
-  // parse request body =============================================
-  // TODO: parse body. POST
+  // store pointer to request body ==================================
+  body = b;
+  body_size = end - b;
+
+  // NOTE: instead of automatically allocating for data that doesn't fit
+  // in the buffer, check if body + body_size == buffer + buffer_size
+  // in the worker function
+  // TODO: how to determine if there's anything left to read?
 }
 
 bool request::fields::operator==(const char* val) const noexcept {
