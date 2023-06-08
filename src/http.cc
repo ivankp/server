@@ -75,8 +75,8 @@ std::string response(
 }
 
 [[noreturn]]
-void throw_error(std::string_view s) {
-  throw http::error(std::string(s));
+void throw_error(std::string&& resp, std::string&& err) {
+  throw http::error(std::move(resp),std::move(err));
 }
 
 request::request(socket sock, char* buffer, size_t size) {
@@ -94,11 +94,15 @@ request::request(socket sock, char* buffer, size_t size) {
   for (;; ++b) {
     if (b == end) {
 unexpected_end:
-      sock << response(400);
-      throw_error( IVAN_ERROR_PREF "HTTP header: unexpected end" );
+      throw_error(
+        response(400),
+        IVAN_ERROR_PREF "HTTP header: unexpected end"
+      );
 bad_header:
-      sock << response(400);
-      throw_error( IVAN_ERROR_PREF "HTTP header: bad header" );
+      throw_error(
+        response(400),
+        IVAN_ERROR_PREF "HTTP header: bad header"
+      );
     }
     const char c = *b;
     if (c == '\r') {
@@ -106,8 +110,10 @@ bad_header:
     } else if (c == '\n') { // line end
       if (!path || path == a) [[unlikely]] goto bad_header;
       if (!starts_with(a,"HTTP/")) [[unlikely]] {
-        sock << response(400);
-        throw_error( IVAN_ERROR_PREF "HTTP header: not HTTP protocol" );
+        throw_error(
+          response(400),
+          IVAN_ERROR_PREF "HTTP header: not HTTP protocol"
+        );
       }
       protocol = a;
       for (;;) { // skip intermediate spaces
@@ -135,13 +141,7 @@ bad_header:
       if (d) {
         d = false;
         a = b;
-        if (!path) {
-          if (*a != '/') [[unlikely]] {
-            sock << response(400);
-            throw_error( IVAN_ERROR_PREF "HTTP header: path doesn't start with /" );
-          }
-          path = a+1;
-        }
+        if (!path) path = a;
       }
     }
   }

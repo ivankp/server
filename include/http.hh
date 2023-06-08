@@ -15,13 +15,14 @@ namespace http {
 std::string_view status_code(int code);
 
 struct error: std::runtime_error {
-  using std::runtime_error::runtime_error;
+  std::string resp;
+  error(auto&& resp, auto&& err)
+  : std::runtime_error(std::move(err)), resp(std::move(resp))
+  { }
 };
 
 [[noreturn]]
-void throw_error(
-  std::string_view ex
-);
+void throw_error(std::string&& resp, std::string&& err);
 
 std::string response(
   int code,

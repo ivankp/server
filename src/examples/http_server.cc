@@ -7,6 +7,7 @@
 #include "mime.hh"
 #include "url.hh"
 #include "addr_ip4.hh"
+#include "request_log.hh"
 #include "strings.hh"
 #include "error.hh"
 #include "debug.hh"
@@ -24,20 +25,32 @@ int main(int argc, char* argv[]) {
 
   cout << "Listening on port " << server.port <<'\n'<< endl;
 
-  server([](unique_socket sock, char* buffer, size_t buffer_size){
+  request_log log("log.txt");
+
+  server([&](unique_socket sock, char* buffer, size_t buffer_size){
+    const auto addr = sock.addr();
   try {
     cout << "\033[32;1m"
       "socket " << sock
-      << " from " << addr_ip4(sock.addr())
+      << " from " << addr_ip4(addr)
       << "\033[0m" << endl;
 
     const http::request req(sock,buffer,buffer_size);
-    if (!req) return;
+    if (!req) {
+      log(sock.addr(),"empty");
+      return;
+    }
 
     // --------------------------------------------------------------
     TEST(req.method)
     TEST(req.path)
     TEST(req.protocol)
+
+    const auto user_agent = req["User-Agent"];
+    log(addr,cat(
+      req.method,' ',req.path,' ',req.protocol,' ',
+      user_agent ? user_agent.value() : "?"
+    ));
 
     for (const auto& [key,val] : req.headers) {
       cout << key << ": " << val << '\n';
@@ -52,8 +65,13 @@ int main(int argc, char* argv[]) {
     // --------------------------------------------------------------
 
     if (!strcmp(req.method,"GET") || !strcmp(req.method,"HEAD")) {
+      char* q = split_query(req.path);
+      if (q) TEST(q)
+      validate_path(req.path);
+      char* path = req.path+1; // skip leading slash
+
       const bool GET = req.method[0] == 'G';
-      if (*req.path=='\0') {
+      if (*path=='\0') {
         std::string_view html =
           "<html><body><p>Hello World!</p></body></html>";
         if (GET) {
@@ -61,7 +79,7 @@ int main(int argc, char* argv[]) {
         } else {
           sock << http::response(html_mime, html.size());
         }
-      } else if (!strcmp(req.path,"headers")) {
+      } else if (!strcmp(path,"headers")) {
         std::stringstream ss;
         ss << "<html><body><table>";
         for (const auto& [key,val] : req.headers) {
@@ -78,17 +96,24 @@ int main(int argc, char* argv[]) {
           sock << http::response(html_mime, ss.str().size());
         }
       } else {
-        sock << http::response(404);
-        http::throw_error(cat(IVAN_ERROR_PREF "path = \"/",req.path,'\"'));
+        http::throw_error(
+          http::response(404),
+          cat(IVAN_ERROR_PREF "path = \"",req.path,'\"')
+        );
       }
     } else {
-      sock << http::response(405,"Allow: GET\r\n");
-      http::throw_error(cat(IVAN_ERROR_PREF "method = \"",req.method,'\"'));
+      http::throw_error(
+        http::response(405,"Allow: GET, HEAD\r\n"),
+        cat(IVAN_ERROR_PREF "method = \"",req.method,'\"')
+      );
     }
-  } catch (const http::error&) { // response has already been handled
+  } catch (const http::error& e) {
+    sock << e.resp;
+    log(addr,e.what());
     throw;
-  } catch (...) {
+  } catch (const std::exception& e) {
     sock << http::status_code(500);
+    log(addr,e.what());
     throw;
   }
   });
