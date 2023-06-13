@@ -95,6 +95,42 @@ int main(int argc, char* argv[]) {
         } else {
           sock << http::response(html_mime, ss.str().size());
         }
+      } else if (!strcmp(path,"query")) {
+        const auto query = parse_query(q);
+
+        std::stringstream ss;
+        ss << "<html><body><table>\n";
+        for (const auto& [key,val] : query) {
+          ss << "<tr> <td><pre>" << key << "</pre></td>";
+          if (val) {
+            ss << " <td><pre>" << val << "</pre></td>";
+          }
+          ss << " </tr>\n";
+        }
+        ss << "</table></body></html>\n";
+        if (GET) {
+          sock << http::response(html_mime, ss.str());
+        } else {
+          sock << http::response(html_mime, ss.str().size());
+        }
+      } else if (!strcmp(path,"plus")) {
+        const auto query = parse_query_plus(q);
+
+        std::stringstream ss;
+        ss << "<html><body><table>\n";
+        for (const auto& [key,vals] : query) {
+          ss << "<tr> <td><pre>" << key << "</pre></td>";
+          for (const char* val : vals) {
+            ss << " <td><pre>" << val << "</pre></td>";
+          }
+          ss << " </tr>\n";
+        }
+        ss << "</table></body></html>\n";
+        if (GET) {
+          sock << http::response(html_mime, ss.str());
+        } else {
+          sock << http::response(html_mime, ss.str().size());
+        }
       } else {
         http::throw_error(
           http::response(404),
