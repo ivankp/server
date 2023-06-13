@@ -70,8 +70,7 @@ void validate_path(char* path) {
 
 std::vector<std::pair<const char*,char*>>
 parse_query(char* m) {
-  using item = std::pair<const char*,char*>;
-  std::vector<item> dict;
+  std::vector<std::pair<const char*,char*>> dict;
   // if (!m || !*m) return dict;
   if (!m) return dict;
   while (*m == '&') ++m;
@@ -125,16 +124,19 @@ parse_query_plus(char* m) {
       a = ++b;
     } else if (c == '&' || c == '\0') {
       *b = '\0';
-      if (vals) vals->push_back(a);
-      else dict.emplace_back(
-        std::piecewise_construct,
-        std::make_tuple(a),
-        std::make_tuple()
-      );
+      if (vals) {
+        vals->push_back(a);
+        vals = nullptr;
+      } else {
+        dict.emplace_back(
+          std::piecewise_construct,
+          std::make_tuple(a),
+          std::make_tuple()
+        );
+      }
       if (c == '\0') break;
       while (*++b == '&');
       if (*b == '\0') break;
-      vals = nullptr;
       a = b;
     } else if (c == '+' && vals) {
       *b = '\0';
