@@ -23,8 +23,8 @@ void request_log::operator()(uint32_t addr, std::string_view entry) {
     len = 1;
   }
 
-  f << addr_ip4(addr) << ' '
-    << std::string_view(buf,len) << ' '
+  f << std::string_view(buf,len) << '\t'
+    << addr_ip4(addr) << '\t'
     << entry << std::endl;
 }
 

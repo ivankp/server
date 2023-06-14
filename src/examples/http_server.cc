@@ -48,7 +48,7 @@ int main(int argc, char* argv[]) {
 
     const auto user_agent = req["User-Agent"];
     log(addr,cat(
-      req.method,' ',req.path,' ',req.protocol,' ',
+      req.method,' ',req.path,' ',req.protocol,'\t',
       user_agent ? user_agent.value() : "?"
     ));
 
@@ -134,16 +134,12 @@ int main(int argc, char* argv[]) {
           sock << http::response(html_mime, ss.str().size());
         }
       } else {
-        http::throw_error(
-          http::response(404),
-          cat(IVAN_ERROR_PREF "path = \"",req.path,'\"')
-        );
+        TEST(req.path)
+        sock << http::response(404);
       }
     } else {
-      http::throw_error(
-        http::response(405,"Allow: GET, HEAD\r\n"),
-        cat(IVAN_ERROR_PREF "method = \"",req.method,'\"')
-      );
+      TEST(req.method)
+      sock << http::response(405,"Allow: GET, HEAD\r\n");
     }
   } catch (const http::error& e) {
     sock << e.resp;
