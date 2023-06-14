@@ -61,6 +61,7 @@ public:
           try {
             if (!event(fd)) {
               worker_function(fd, buffer, buffer_size);
+              // TODO: make sure worker_function doesn't run indefinitely
             }
           } catch (const std::exception& e) {
             std::cerr << "\033[31;1m" << e.what() << "\033[0m" << std::endl;

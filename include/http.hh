@@ -74,12 +74,8 @@ public:
   using header_t = std::pair<const char*,const char*>;
   std::vector<header_t> headers;
 
-private:
-  char* buffer { };
-
 public:
   request(socket, char* buffer, size_t size);
-  ~request() { if (buffer) delete[] buffer; }
 
   struct fields {
     const header_t* ptr { };

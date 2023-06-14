@@ -81,6 +81,7 @@ void throw_error(std::string&& resp, std::string&& err) {
 
 request::request(socket sock, char* buffer, size_t size) {
   const auto nread = sock.read(buffer,size);
+  // TODO: make sure whole head is read
   if (nread == 0) return;
 
   // std::cout << std::string_view(buffer,nread) << std::endl;
@@ -132,7 +133,7 @@ bad_header:
       b[1] = '\0';
       b = a;
       break;
-    } else if (c == ' ' || c == '\t') { // delimeter
+    } else if (c == ' ' || c == '\t') { // delimiter
       if (!d) {
         d = true;
         if (!path) *b = '\0';
@@ -172,7 +173,7 @@ bad_header:
       key = nullptr;
       if (++b == end) break; // last header but no blank line
       a = b;
-    } else [[likely]] { // not a delimeter
+    } else [[likely]] { // not a delimiter
       ++b;
     }
   }
@@ -180,7 +181,6 @@ bad_header:
     headers.begin(), headers.end(),
     [](const auto& a, const auto& b){ return strcmp(a.first,b.first) < 0; }
   );
-  if (b == end) return; // no body
 
   // store pointer to request body ==================================
   body = b;
@@ -190,6 +190,9 @@ bad_header:
   // in the buffer, check if body + body_size == buffer + buffer_size
   // in the worker function
   // TODO: how to determine if there's anything left to read?
+
+  // Can use remaining thread buffer for loading long data in chunks.
+  // No need to allocate indiscriminately
 }
 
 bool request::fields::operator==(const char* val) const noexcept {
