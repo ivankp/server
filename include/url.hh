@@ -16,6 +16,8 @@ parse_query(char* query);
 std::vector<std::pair<const char*,std::vector<char*>>>
 parse_query_plus(char* query);
 
+size_t percent_decode(char*);
+
 }
 
 #endif

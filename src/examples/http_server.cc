@@ -100,9 +100,10 @@ int main(int argc, char* argv[]) {
 
         std::stringstream ss;
         ss << "<html><body><table>\n";
-        for (const auto& [key,val] : query) {
+        for (auto [key,val] : query) {
           ss << "<tr> <td><pre>" << key << "</pre></td>";
           if (val) {
+            if (!strcmp(key,"%")) percent_decode(val);
             ss << " <td><pre>" << val << "</pre></td>";
           }
           ss << " </tr>\n";
@@ -120,7 +121,8 @@ int main(int argc, char* argv[]) {
         ss << "<html><body><table>\n";
         for (const auto& [key,vals] : query) {
           ss << "<tr> <td><pre>" << key << "</pre></td>";
-          for (const char* val : vals) {
+          for (char* val : vals) {
+            if (!strcmp(key,"%")) percent_decode(val);
             ss << " <td><pre>" << val << "</pre></td>";
           }
           ss << " </tr>\n";

@@ -18,3 +18,5 @@
 #endif
 
 #endif
+
+template <typename> struct test_type;

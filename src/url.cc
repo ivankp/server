@@ -3,8 +3,6 @@
 
 // #include "debug.hh"
 
-// TODO: parse % encoding
-
 namespace ivan {
 
 char* split_query(char* path) {
@@ -148,6 +146,43 @@ parse_query_plus(char* m) {
   }
 
   return dict;
+}
+
+size_t percent_decode(char* s) {
+  char *a=s, *b=s, c, x;
+  for (;; *a = c, ++a, ++b) {
+    c = *b;
+    if (c == '%') {
+percent:
+      x = *++b;
+      if ('0' <= x && x <= '9') { x -= '0'   ; } else
+      if ('A' <= x && x <= 'F') { x -= 'A'-10; } else
+      if ('a' <= x && x <= 'f') { x -= 'a'-10; } else
+      {
+        *a = '%'; ++a;
+        goto not_hex;
+      }
+      c = x << 4;
+
+      x = *++b;
+      if ('0' <= x && x <= '9') { x -= '0'   ; } else
+      if ('A' <= x && x <= 'F') { x -= 'A'-10; } else
+      if ('a' <= x && x <= 'f') { x -= 'a'-10; } else
+      {
+        *a = '%'; ++a;
+        *a = b[-1]; ++a;
+not_hex:
+        if (x == '%') goto percent;
+        if (x == '\0') break;
+        c = x;
+        continue;
+      }
+      c += x;
+
+    } else if (c == '\0') break;
+  }
+  *a = '\0';
+  return a - s;
 }
 
 }
