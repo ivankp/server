@@ -8,6 +8,7 @@
 #include "url.hh"
 #include "addr_ip4.hh"
 #include "request_log.hh"
+#include "file_cache.hh"
 #include "strings.hh"
 #include "error.hh"
 #include "debug.hh"

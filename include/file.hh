@@ -11,6 +11,7 @@ struct file {
   file(const char* name);
   ~file();
   operator int() const noexcept { return fd; }
+  int operator+() const noexcept { return fd; }
 };
 
 struct regular_file: file {
