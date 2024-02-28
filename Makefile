@@ -25,21 +25,20 @@ all: $(EXE)
 
 .build/addr_blacklist.o: CFLAGS += -DSERVER_VERBOSE_BLACKLIST
 
-.build/server.o: CFLAGS += -pthread
-.build/socket.o: CFLAGS += -pthread
-.build/examples/echo_server.o: CFLAGS += -pthread
+.build/examples/%_server.o \
+.build/server.o .build/socket.o \
+: CFLAGS += -pthread
+
+bin/examples/%_server: LDFLAGS += -pthread
 
 bin/examples/echo_server: $(patsubst %, .build/%.o, \
-  socket error addr_ip4 \
-  server addr_blacklist \
+  socket error addr_ip4 server \
 )
-bin/examples/echo_server: LDFLAGS += -pthread
 
 bin/examples/http_server: $(patsubst %, .build/%.o, \
   socket error addr_ip4 \
-  server http file mime url request_log cache \
+  server http file mime url request_log file_cache \
 )
-bin/examples/http_server: LDFLAGS += -pthread
 
 .PRECIOUS: .build/%.o
 

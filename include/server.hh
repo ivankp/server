@@ -6,6 +6,9 @@
 #include <iostream>
 #include <utility>
 #include <memory>
+#include <deque>
+#include <atomic>
+#include <bit>
 
 #include "socket.hh"
 #include "thread_safe_queue.hh"
@@ -30,6 +33,10 @@ protected:
   epoll_event* epoll_events;
   char* thread_buffers;
 
+  // std::set<int> engaged_fds;
+  std::deque<std::atomic<bool>> engaged_fds;
+  std::mutex engaged_fds_mx;
+
   int epoll_add(int);
   virtual void init();
 
@@ -43,14 +50,11 @@ public:
   ~basic_server();
 
   template <typename F>
-  void operator()(
-    F&& worker_function
-  ) {
-
+  void operator()(F&& worker_function) {
     init();
 
     for (unsigned i=0; i<n_threads; ++i) {
-      std::construct_at(threads+i,[
+      std::construct_at(threads+i, [
         this,
         worker_function,
         buffer = thread_buffers + thread_buffer_size*i,
@@ -58,6 +62,25 @@ public:
       ]() mutable {
         for (;;) {
           const int fd = queue.pop();
+          const size_t i = fd;
+
+          // TODO: attempt to prevent multiple threads from getting the same socket
+          // Doesn't prevent this:
+          // socket 5 from src/socket.cc:70: getpeername(): 9: Bad file descriptor
+          // socket 5 from 127.0.0.1
+          { std::lock_guard lock(engaged_fds_mx);
+            const size_t n1 = engaged_fds.size();
+            if (i >= n1) {
+              const size_t n2 = std::bit_ceil(i);
+              engaged_fds.resize(n2);
+              for (size_t i=n1; i<n2; ++i)
+                engaged_fds[i].store(false);
+            } else if (engaged_fds[i].load()) {
+              continue;
+            }
+            engaged_fds[i].store(true);
+          }
+
           try {
             if (!event(fd)) {
               worker_function(fd, buffer, buffer_size);
@@ -68,6 +91,8 @@ public:
           } catch (...) {
             std::cerr << "\033[31;1m" "UNKNOWN EXCEPTION" "\033[0m" << std::endl;
           }
+
+          engaged_fds[i].store(false);
         }
       });
     }

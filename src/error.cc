@@ -1,3 +1,4 @@
+#include "numconv.hh"
 #include "error.hh"
 
 #include <stdexcept>
@@ -12,7 +13,7 @@ void exception(std::string_view s) {
 
 [[noreturn]]
 void exception_errno(std::string_view s) {
-  throw std::runtime_error( ivan::cat( s, std::strerror(errno) ) );
+  throw std::runtime_error( ivan::cat( s, errno, ": ", std::strerror(errno) ) );
 }
 
 }

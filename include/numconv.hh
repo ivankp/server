@@ -61,6 +61,7 @@ xtos(T x) -> xtos<T>;
 // ------------------------------------------------------------------
 
 #include "strings.hh"
+#include <stdexcept>
 
 namespace ivan {
 

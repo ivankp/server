@@ -134,6 +134,9 @@ void basic_server::loop() noexcept {
             }
           }
         } else {
+          // TODO: remove socket from epoll?
+          // Data left in a socket after an incomplete read appears to trigger
+          // another epoll event
           queue.push(fd);
         }
       } catch (const std::exception& e) {

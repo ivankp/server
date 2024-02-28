@@ -1,3 +1,0 @@
-2023 Jun 14 Wed 19:33:28	127.0.0.1	GET /x HTTP/1.1	Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36
-2023 Jun 14 Wed 19:33:35	127.0.0.1	GET /query?%=%CF%84%CE%B7%CF%83%CF%84 HTTP/1.1	Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36
-2023 Jun 14 Wed 19:33:37	127.0.0.1	GET /query? HTTP/1.1	Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36
