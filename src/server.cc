@@ -41,7 +41,8 @@ void basic_server::init() {
   nonblock(main_socket);
   PCALL(listen)(main_socket, SOMAXCONN/*backlog*/);
 
-  if (epoll_add(main_socket)) THROW_ERRNO("epoll_add()");
+  if (epoll_add(main_socket, EPOLLIN | EPOLLRDHUP | EPOLLET))
+    THROW_ERRNO("epoll_add()");
 
   { // allocate dynamic storage
     size_t len[] {
@@ -57,7 +58,7 @@ void basic_server::init() {
     if (r) r = 8 - r;
     len[2] += (len[1] += r);
 
-    char* m = reinterpret_cast<char*>(::malloc( len[std::size(len)-1] ));
+    char* m = reinterpret_cast<char*>(::malloc( len[2] ));
 
     threads = reinterpret_cast<decltype(threads)>(m);
     epoll_events = reinterpret_cast<decltype(epoll_events)>(m + len[0]);
@@ -65,16 +66,16 @@ void basic_server::init() {
   }
 }
 basic_server::~basic_server() {
-  ::close(epoll);
   ::close(main_socket);
+  ::close(epoll);
 
-  std::destroy_n(threads,n_threads);
+  std::destroy_n(threads, n_threads);
   ::free(threads);
 }
 
-int basic_server::epoll_add(int fd) {
+int basic_server::epoll_add(int fd, uint32_t flags) {
   epoll_event event {
-    .events = EPOLLIN | EPOLLRDHUP | EPOLLET,
+    .events = flags,
     .data = { .fd = fd }
   };
   return ::epoll_ctl(epoll,EPOLL_CTL_ADD,fd,&event);
@@ -128,15 +129,12 @@ void basic_server::loop() noexcept {
             // TODO: setsockopt(): SO_RCVTIMEO, SO_SNDTIMEO
 
             nonblock(sock);
-            if (epoll_add(sock)) {
+            if (epoll_add(sock, EPOLLIN | EPOLLRDHUP | EPOLLET | EPOLLONESHOT)) {
               ::close(sock);
               THROW_ERRNO("epoll_add()");
             }
           }
         } else {
-          // TODO: remove socket from epoll?
-          // Data left in a socket after an incomplete read appears to trigger
-          // another epoll event
           queue.push(fd);
         }
       } catch (const std::exception& e) {
