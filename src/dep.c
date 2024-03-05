@@ -7,9 +7,10 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/wait.h>
+// #include <sys/wait.h>
 
 #include <dirent.h>
+#include <fcntl.h>
 
 #define STR1(x) #x
 #define STR(x) STR1(x)
@@ -19,37 +20,21 @@
 
 #define ERROR_PREF __FILE__ ":" STR(__LINE__) ": "
 
-#define GET_MACRO(_1, _2, NAME, ...) NAME
-
-#define ERR(...) GET_MACRO(__VA_ARGS__, ERR2, ERR1)(__VA_ARGS__)
-#define ERR1(FCN) ERR2(err,FCN)
-#define ERR2(LABEL, FCN) { \
+#define ERR(WHAT, ...) { \
   const int e = errno; \
   fprintf( \
     stderr, \
-    ERROR_PREF FCN "(): [%d] %s", \
-    e, strerror(e) \
-  ); \
-  goto LABEL; \
-}
-
-#define FATAL(FCN) { \
-  const int e = errno; \
-  fprintf( \
-    stderr, \
-    ERROR_PREF FCN "(): [%d] %s", \
-    e, strerror(e) \
+    ERROR_PREF WHAT ": [%d] %s", ##__VA_ARGS__, e, strerror(e) \
   ); \
   exit(1); \
 }
 
-char* memapp(char* dest, const char* src, size_t count) {
-  memcpy(dest, src, count);
-  return dest + count;
+bool stnr(char c) {
+  return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
 
-char* srcs[1 << 5];
-size_t num_srcs = 0;
+// char* srcs[1 << 5];
+// size_t num_srcs = 0;
 
 typedef struct target_s {
   char* name;
@@ -79,9 +64,9 @@ void print_target(const target* t) {
     print_target(dep);
 }
 
-int src_loop(char* path, size_t len, size_t cap) {
+void file_loop(char* path, size_t len, size_t cap) {
   DIR* D = opendir(path);
-  if (!D) ERR("opendir")
+  if (!D) ERR("opendir()")
 
   char* path2 = path + len;
   *path2 = '/';
@@ -89,8 +74,6 @@ int src_loop(char* path, size_t len, size_t cap) {
   ++len;
 
   const size_t rem = cap - len - 1; // 1 for null
-
-  int pipes[2][2]; // 0 - read end, 1 - write end
 
   for (struct dirent *d; (d = readdir(D)); ) {
     const char* const name2 = d->d_name;
@@ -100,8 +83,8 @@ int src_loop(char* path, size_t len, size_t cap) {
 
     const size_t name2_len = strlen(name2);
     if (rem < name2_len) {
-      fprintf(stderr, "path is too long\n");
-      goto err;
+      fprintf(stderr, ERROR_PREF "path is too long\n");
+      exit(1);
     }
 
     const size_t len2 = len + name2_len;
@@ -109,8 +92,7 @@ int src_loop(char* path, size_t len, size_t cap) {
 
     switch (d->d_type) {
       case DT_DIR:
-        const int ret = src_loop(path, len2, cap);
-        if (ret) return ret;
+        file_loop(path, len2, cap);
         break;
       case DT_REG:
       case DT_LNK:
@@ -127,108 +109,79 @@ int src_loop(char* path, size_t len, size_t cap) {
           strcmp(ext, "C")
         )) {
           // TODO: dynamically extend srcs array
-          memcpy( (srcs[num_srcs++] = malloc(len2+1)), path, len2+1 );
+          /* memcpy( (srcs[num_srcs++] = malloc(len2+1)), path, len2+1 ); */
 
-          // TODO: spaces in file names
-          // TODO: exec instead of system
-          static char cmd[1 << 10];
-          sprintf(cmd, "grep -q '^\\s*int\\s\\+main\\s*(' '%s'", path);
-          const int main = system(cmd) == 0;
-          if (main) {
-          //   // TODO: exec instead of system
-          //   /* sprintf(cmd, "g++ -std=c++20 -Iinclude -MM '%s' -MT ''", path); */
-          //   /* system(cmd); */
+          printf("%s\n", path);
 
-          //   sprintf(cmd, "make -n '.build/%.*s.o' -W '%s'",
-          //     (int)(len2 - 5 - (name2_len - (ext - name2))), path+4, path
-          //   );
-          //   system(cmd);
+          static char* buf = NULL;
+          static size_t cap = 0;
 
-            size_t target_len = len2 + 4 - (name2_len - (ext - name2));
-            char* target = malloc(target_len);
-            memapp(
-              memapp(
-                memapp(
-                  target, ".build/", 7
-                ), path+4, target_len-9
-              ), ".o", 2
-            );
+          const int fd = open(path, O_RDONLY);
+          if (fd < 0) ERR("open('%s')", path)
 
-            char* args[] = {
-              "make", "-n", target, "-W", path, NULL
-            };
+          struct stat sb;
+          if (fstat(fd, &sb) < 0) ERR("fstat('%s')", path)
+          if (!S_ISREG(sb.st_mode)) ERR("'%s' is not a regular file", path)
+          const size_t size = sb.st_size;
 
-            if (pipe(pipes[0])) ERR("pipe")
-            if (pipe(pipes[1])) ERR(err_close_0, "pipe")
-
-            const pid_t pid = fork();
-            if (pid < 0) ERR(err_close_1, "fork")
-            if (pid == 0) { // this is the child process
-              if (dup2(pipes[0][0], STDIN_FILENO ) < 0) FATAL("dup2")
-              if (dup2(pipes[1][1], STDOUT_FILENO) < 0) FATAL("dup2")
-              // Note: dup2 doesn't close original fd
-
-              // Note: fds are open separately in both processes
-              close(pipes[0][0]);
-              close(pipes[0][1]);
-              close(pipes[1][0]);
-              close(pipes[1][1]);
-
-              // TODO: how to signal child process failure???
-
-              execvp(args[0], args); // child process is replaced by exec()
-
-              // The exec() functions only return if an error has occurred.
-              fprintf(stderr, "command:");
-              for (int j=0; args[j]; ++j)
-                fprintf(stderr, " '%s'", args[j]);
-              fprintf(stderr, "\n");
-              FATAL("execvp")
-            }
-            // TODO: https://linux.die.net/man/2/waitpid
-
-            // original process
-            close(pipes[0][0]); // read end of input pipe
-            close(pipes[1][1]); // write end of output pipe
-
-            close(pipes[0][1]); // write end of input pipe
-
-            char buf[1 << 10];
-            const int nread = read(pipes[1][0], buf, sizeof(buf));
-
-            printf("%.*s\n", nread, buf);
-
-            close(pipes[1][0]); // read end of the output pipe
+          if (cap < size) {
+            if (size > (1 << 20)) ERR("'%s' is too large", path)
+            cap = size < (1 << 12) ? (1 << 12) : size + 1;
+            free(buf);
+            buf = malloc(cap);
           }
+
+          if (read(fd, buf, size) < 0) ERR("read('%s')", path)
+          buf[size] = '\0';
+
+          for (const char* a = buf;;) {
+            const char* main = strstr(a, "main");
+            if (!main) break;
+
+            // printf(" %.6s\n", main);
+            a = main + 4; // length of main
+            a += strspn(a, " \t\n\r");
+            if (*a != '(')
+              goto not_main;
+
+            const char* b = main;
+            for (const char* const end = buf - 2; b > end; ) {
+              if (!stnr(*--b)) {
+                b -= 2;
+                // printf(" %.12s\n", b);
+                if (!(
+                  b < main-3 &&
+                  !strncmp(b, "int", 3) &&
+                  (b == buf || stnr(b[-1]))
+                ))
+                  goto not_main;
+                else
+                  break;
+              }
+            }
+
+            printf("  main()\n");
+            break;
+
+not_main: ;
+          }
+
+          close(fd);
         }
         break;
     }
   }
 
   closedir(D);
-
-  return 0;
-
-err_close_1:
-  close(pipes[1][0]);
-  close(pipes[1][1]);
-
-err_close_0:
-  close(pipes[0][0]);
-  close(pipes[0][1]);
-
-err:
-  return 1;
 }
 
 int main(int argc, char** argv) {
   char path[1 << 10] = "src";
 
-  int ret = src_loop(path, strlen(path), sizeof(path));
-  if (ret) return ret;
+  file_loop(path, strlen(path), sizeof(path));
 
-  for (char** p = srcs; *p; ++p) {
-    printf("%s\n", *p);
-    free(*p);
-  }
+  // for (char** p = srcs; *p; ++p) {
+  //   printf("%s\n", *p);
+  //   free(*p);
+  // }
 }
