@@ -16,12 +16,16 @@ CPPSTD := c++20
 DEPFLAGS = -MT $@ -MMD -MP -MF .build/$*.d
 
 FIND_MAIN := \
-  find src -type f -regex '.*\.cc?$$' \
-  | xargs grep -l '^\s*int\s\+main\s*(' \
-  | sed 's:^src/\(.*\)\.c\+$$:bin/\1:'
-EXE := $(shell $(FIND_MAIN))
+  xargs grep -l '^\s*int\s\+main\s*(' \
+  | sed -n 's:^src/\(.*\)\.cc\?$$:bin/\1:p'
 
-all: $(EXE)
+all:
+
+.build/exe.mk: $(shell find src -type f)
+	@mkdir -pv $(dir $@)
+	@echo 'all:' $(shell echo $^ | $(FIND_MAIN)) > $@
+
+-include .build/exe.mk
 
 .build/addr_blacklist.o: CFLAGS += -DSERVER_VERBOSE_BLACKLIST
 
