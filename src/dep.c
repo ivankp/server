@@ -56,6 +56,52 @@ void print_target(const target* t) {
     print_target(dep);
 }
 
+bool is_main(const char* const buf) {
+#define ISBLANK(c) \
+  ( c == ' ' || c == '\t' || c == '\n' || c == '\r' )
+
+#define PREFIX "int"
+#define MARKER "main"
+
+  const size_t nmarker = sizeof(MARKER) - 1;
+  const size_t nprefix = sizeof(PREFIX) - 1;
+
+  const char* const prefix_last = buf + (nprefix - 1);
+
+  for (const char* a = buf;;) {
+    const char* m = strstr(a, MARKER);
+    if (!m) return false;
+
+    // printf(" %.6s\n", m);
+    a = m + nmarker;
+    for (;;) {
+      const char c = *a;
+      if (!ISBLANK(c)) break;
+      ++a;
+    }
+    if (*a != '(') continue;
+
+    for (const char* b = m; b > prefix_last; ) {
+      char c = *--b;
+      if (!ISBLANK(c)) {
+        // printf(" %.12s\n", b);
+        if (
+          m - b > 1 && // at least one space between
+          !strncmp((b -= (nprefix - 1)), PREFIX, nprefix) &&
+          ( b == buf || ( c = b[-1], ISBLANK(c) ) )
+        )
+          return true;
+        else
+          break;
+      }
+    }
+  }
+
+#undef MARKER
+#undef PREFIX
+#undef ISBLANK
+}
+
 void dir_loop(char* path, size_t len, size_t cap) {
   DIR* D = opendir(path);
   if (!D) ERR("opendir()")
@@ -126,46 +172,8 @@ void dir_loop(char* path, size_t len, size_t cap) {
           if (read(fd, buf, size) < 0) ERR("read('%s')", path)
           buf[size] = '\0';
 
-          for (const char* a = buf;;) {
-            const char* main = strstr(a, "main");
-            if (!main) break;
-
-#define ISBLANK(c) \
-  ( c == ' ' || c == '\t' || c == '\n' || c == '\r' )
-
-            // printf(" %.6s\n", main);
-            a = main + 4; // length of main
-            for (;; ++a) {
-              const char c = *a;
-              if (!ISBLANK(c)) break;
-            }
-            if (*a != '(')
-              goto not_main;
-
-            const char* b = main;
-            for (const char* const end = buf - 2; b > end; ) {
-              char c = *--b;
-              if (!ISBLANK(c)) {
-                b -= 2;
-                // printf(" %.12s\n", b);
-                if (!(
-                  b < main-3 &&
-                  !strncmp(b, "int", 3) &&
-                  ( b == buf || ( c = b[-1], ISBLANK(c) ) )
-                ))
-                  goto not_main;
-                else
-                  break;
-              }
-            }
-
-#undef ISBLANK
-
+          if (is_main(buf))
             printf("  main()\n");
-            break;
-
-not_main: ;
-          }
 
           close(fd);
         }
