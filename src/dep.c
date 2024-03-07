@@ -28,8 +28,22 @@
   exit(1); \
 }
 
+char* file_buf = NULL;
+size_t file_cap = 0;
+
+size_t bit_ceil(size_t v) {
+  --v;
+  v |= v >> 1;
+  v |= v >> 2;
+  v |= v >> 4;
+  v |= v >> 8;
+  v |= v >> 16;
+  v |= v >> 32;
+  return ++v;
+}
+
 typedef struct target_s {
-  char* name;
+  const char* name;
   struct target_s* deps;
   size_t num_deps;
 } target;
@@ -39,6 +53,22 @@ target all = {
   .deps = NULL,
   .num_deps = 0
 };
+
+target* add_target(target* t, const char* name) {
+  const size_t n = t->num_deps;
+  if (n == 0) {
+    t->deps = calloc(1, sizeof(target));
+  } else {
+    const size_t chunk = bit_ceil(n);
+    if (n == chunk) {
+      t->deps = realloc(t->deps, chunk * 2 * sizeof(target));
+      memset(t->deps + chunk, 0, chunk);
+    }
+  }
+  t->deps[n].name = name;
+  ++t->num_deps;
+  return &t->deps[n];
+}
 
 void print_target(const target* t) {
   if (!t->num_deps) return;
@@ -146,13 +176,7 @@ void dir_loop(char* path, size_t len, size_t cap) {
           strcmp(ext, "c++") &&
           strcmp(ext, "C")
         )) {
-          // TODO: dynamically extend srcs array
-          /* memcpy( (srcs[num_srcs++] = malloc(len2+1)), path, len2+1 ); */
-
           printf("%s\n", path);
-
-          static char* buf = NULL;
-          static size_t cap = 0;
 
           const int fd = open(path, O_RDONLY);
           if (fd < 0) ERR("open('%s')", path)
@@ -160,20 +184,28 @@ void dir_loop(char* path, size_t len, size_t cap) {
           struct stat sb;
           if (fstat(fd, &sb) < 0) ERR("fstat('%s')", path)
           if (!S_ISREG(sb.st_mode)) ERR("'%s' is not a regular file", path)
-          const size_t size = sb.st_size;
+          const size_t file_size = sb.st_size;
 
-          if (cap < size) {
-            if (size > (1 << 20)) ERR("'%s' is too large", path)
-            cap = size < (1 << 12) ? (1 << 12) : size + 1;
-            free(buf);
-            buf = malloc(cap);
+          if (file_cap < file_size) {
+            if (file_size > (1 << 20)) ERR("'%s' is too large", path)
+            file_cap = file_size < (1 << 12) ? (1 << 12) : file_size + 1;
+            free(file_buf);
+            file_buf = malloc(file_cap);
           }
 
-          if (read(fd, buf, size) < 0) ERR("read('%s')", path)
-          buf[size] = '\0';
+          if (read(fd, file_buf, file_size) < 0) ERR("read('%s')", path)
+          file_buf[file_size] = '\0';
 
-          if (is_main(buf))
-            printf("  main()\n");
+          if (is_main(file_buf)) {
+            char* src = malloc(len2+1);
+            memcpy(src, path, len2+1);
+
+            const char* slash = strchr(path, '/');
+            char* exe = malloc(len2+1-(slash-path)+3);
+            sprintf(exe, "bin%s", slash);
+
+            add_target(add_target(&all, exe), src);
+          }
 
           close(fd);
         }
@@ -189,8 +221,7 @@ int main(int argc, char** argv) {
 
   dir_loop(path, strlen(path), sizeof(path));
 
-  // for (char** p = srcs; *p; ++p) {
-  //   printf("%s\n", *p);
-  //   free(*p);
-  // }
+  print_target(&all);
+
+  free(file_buf);
 }
