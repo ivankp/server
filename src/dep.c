@@ -7,7 +7,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-// #include <sys/wait.h>
 
 #include <dirent.h>
 #include <fcntl.h>
@@ -28,13 +27,6 @@
   ); \
   exit(1); \
 }
-
-bool stnr(char c) {
-  return c == ' ' || c == '\t' || c == '\n' || c == '\r';
-}
-
-// char* srcs[1 << 5];
-// size_t num_srcs = 0;
 
 typedef struct target_s {
   char* name;
@@ -64,7 +56,7 @@ void print_target(const target* t) {
     print_target(dep);
 }
 
-void file_loop(char* path, size_t len, size_t cap) {
+void dir_loop(char* path, size_t len, size_t cap) {
   DIR* D = opendir(path);
   if (!D) ERR("opendir()")
 
@@ -92,7 +84,7 @@ void file_loop(char* path, size_t len, size_t cap) {
 
     switch (d->d_type) {
       case DT_DIR:
-        file_loop(path, len2, cap);
+        dir_loop(path, len2, cap);
         break;
       case DT_REG:
       case DT_LNK:
@@ -138,27 +130,36 @@ void file_loop(char* path, size_t len, size_t cap) {
             const char* main = strstr(a, "main");
             if (!main) break;
 
+#define ISBLANK(c) \
+  ( c == ' ' || c == '\t' || c == '\n' || c == '\r' )
+
             // printf(" %.6s\n", main);
             a = main + 4; // length of main
-            a += strspn(a, " \t\n\r");
+            for (;; ++a) {
+              const char c = *a;
+              if (!ISBLANK(c)) break;
+            }
             if (*a != '(')
               goto not_main;
 
             const char* b = main;
             for (const char* const end = buf - 2; b > end; ) {
-              if (!stnr(*--b)) {
+              char c = *--b;
+              if (!ISBLANK(c)) {
                 b -= 2;
                 // printf(" %.12s\n", b);
                 if (!(
                   b < main-3 &&
                   !strncmp(b, "int", 3) &&
-                  (b == buf || stnr(b[-1]))
+                  ( b == buf || ( c = b[-1], ISBLANK(c) ) )
                 ))
                   goto not_main;
                 else
                   break;
               }
             }
+
+#undef ISBLANK
 
             printf("  main()\n");
             break;
@@ -178,7 +179,7 @@ not_main: ;
 int main(int argc, char** argv) {
   char path[1 << 10] = "src";
 
-  file_loop(path, strlen(path), sizeof(path));
+  dir_loop(path, strlen(path), sizeof(path));
 
   // for (char** p = srcs; *p; ++p) {
   //   printf("%s\n", *p);
