@@ -23,13 +23,30 @@
   const int e = errno; \
   fprintf( \
     stderr, \
-    ERROR_PREF WHAT ": [%d] %s", ##__VA_ARGS__, e, strerror(e) \
+    ERROR_PREF WHAT ": [%d] %s\n", ##__VA_ARGS__, e, strerror(e) \
   ); \
   exit(1); \
 }
 
-char* file_buf = NULL;
-size_t file_cap = 0;
+char* file_buf;
+size_t file_cap;
+
+typedef struct {
+  const char* str;
+  size_t len;
+} string;
+
+typedef struct target_s {
+  const char* name;
+  struct target_s* deps;
+  size_t num_deps;
+} target;
+
+target
+  executables = { .name = "all" },
+  objects = { },
+  sources = { },
+  headers = { };
 
 size_t bit_ceil(size_t v) {
   --v;
@@ -42,27 +59,16 @@ size_t bit_ceil(size_t v) {
   return ++v;
 }
 
-typedef struct target_s {
-  const char* name;
-  struct target_s* deps;
-  size_t num_deps;
-} target;
-
-target all = {
-  .name = "all",
-  .deps = NULL,
-  .num_deps = 0
-};
-
 target* add_target(target* t, const char* name) {
   const size_t n = t->num_deps;
   if (n == 0) {
     t->deps = calloc(1, sizeof(target));
   } else {
-    const size_t chunk = bit_ceil(n);
-    if (n == chunk) {
-      t->deps = realloc(t->deps, chunk * 2 * sizeof(target));
-      memset(t->deps + chunk, 0, chunk);
+    const size_t cap = bit_ceil(n);
+    if (n == cap) {
+      const size_t cap_bytes = cap * sizeof(target);
+      t->deps = realloc(t->deps, cap_bytes * 2);
+      memset(t->deps + cap, 0, cap_bytes);
     }
   }
   t->deps[n].name = name;
@@ -70,7 +76,7 @@ target* add_target(target* t, const char* name) {
   return &t->deps[n];
 }
 
-void print_target(const target* t) {
+void print_targets(const target* t) {
   if (!t->num_deps) return;
 
   printf("%s:", t->name);
@@ -83,10 +89,14 @@ void print_target(const target* t) {
 
   dep = t->deps;
   for (; dep != end; ++dep)
-    print_target(dep);
+    print_targets(dep);
 }
 
-bool is_main(const char* const buf) {
+void free_targets(target* t) {
+  // TODO
+}
+
+bool is_main(const char* buf) {
 #define ISBLANK(c) \
   ( c == ' ' || c == '\t' || c == '\n' || c == '\r' )
 
@@ -134,7 +144,7 @@ bool is_main(const char* const buf) {
 
 void dir_loop(char* path, size_t len, size_t cap) {
   DIR* D = opendir(path);
-  if (!D) ERR("opendir()")
+  if (!D) ERR("opendir('%s')", path)
 
   char* path2 = path + len;
   *path2 = '/';
@@ -185,26 +195,48 @@ void dir_loop(char* path, size_t len, size_t cap) {
           if (fstat(fd, &sb) < 0) ERR("fstat('%s')", path)
           if (!S_ISREG(sb.st_mode)) ERR("'%s' is not a regular file", path)
           const size_t file_size = sb.st_size;
+          if (file_size == 0) continue;
 
-          if (file_cap < file_size) {
-            if (file_size > (1 << 20)) ERR("'%s' is too large", path)
-            file_cap = file_size < (1 << 12) ? (1 << 12) : file_size + 1;
+          if (file_cap <= file_size) {
+            const size_t file_size_ceil = bit_ceil(file_size + 1);
+            if (file_size_ceil > (1 << 24)) ERR("'%s' is too large", path)
             free(file_buf);
-            file_buf = malloc(file_cap);
+            file_buf = malloc((file_cap = file_size_ceil));
           }
 
           if (read(fd, file_buf, file_size) < 0) ERR("read('%s')", path)
           file_buf[file_size] = '\0';
 
+          /* while (find_include(file_buf)) { */
+          /* } */
+
           if (is_main(file_buf)) {
-            char* src = malloc(len2+1);
-            memcpy(src, path, len2+1);
+            string stem;
+            stem.str = strchr(path, '/');
+            stem.len = len2
+                     - (stem.str - path) // prefix (src)
+                     - (name2_len - (ext - name2) + 1); // extension
 
-            const char* slash = strchr(path, '/');
-            char* exe = malloc(len2+1-(slash-path)+3);
-            sprintf(exe, "bin%s", slash);
+            char* name;
 
-            add_target(add_target(&all, exe), src);
+            // add executable
+            name = malloc(3 + stem.len + 1);
+            target* exe = add_target(&executables, name);
+            memcpy(name, "bin", 3); name += 3;
+            memcpy(name, stem.str, stem.len); name += stem.len;
+            *name = '\0';
+
+            // add object
+            name = malloc(6 + stem.len + 2 + 1);
+            target* obj = add_target(exe, name);
+            memcpy(name, ".build", 6); name += 6;
+            memcpy(name, stem.str, stem.len); name += stem.len;
+            memcpy(name, ".o", 3);
+
+            // add source
+            name = malloc(len2+1);
+            target* src = add_target(obj, name);
+            memcpy(name, path, len2+1);
           }
 
           close(fd);
@@ -217,11 +249,13 @@ void dir_loop(char* path, size_t len, size_t cap) {
 }
 
 int main(int argc, char** argv) {
+  file_buf = malloc((file_cap = 1 << 12));
+
   char path[1 << 10] = "src";
 
   dir_loop(path, strlen(path), sizeof(path));
 
-  print_target(&all);
+  print_targets(&executables);
 
   free(file_buf);
 }
