@@ -38,7 +38,7 @@ typedef struct {
 
 typedef struct target_s {
   const char* name;
-  struct target_s* deps;
+  struct target_s** deps;
   size_t num_deps;
 } target;
 
@@ -59,21 +59,39 @@ size_t bit_ceil(size_t v) {
   return ++v;
 }
 
-target* add_target(target* t, const char* name) {
-  const size_t n = t->num_deps;
+void append_target(target* t, target* parent) {
+  const size_t n = parent->num_deps;
   if (n == 0) {
-    t->deps = calloc(1, sizeof(target));
+    parent->deps = calloc(1, sizeof(target*));
   } else {
     const size_t cap = bit_ceil(n);
     if (n == cap) {
-      const size_t cap_bytes = cap * sizeof(target);
-      t->deps = realloc(t->deps, cap_bytes * 2);
-      memset(t->deps + cap, 0, cap_bytes);
+      const size_t cap_bytes = cap * sizeof(target*);
+      parent->deps = realloc(parent->deps, cap_bytes * 2);
     }
   }
-  t->deps[n].name = name;
-  ++t->num_deps;
-  return &t->deps[n];
+  parent->deps[n] = t;
+  ++parent->num_deps;
+}
+
+target* add_target(const char* name, target* parent, target* set) {
+  target* t = NULL;
+  if (set) {
+    for (size_t i = 0; i < set->num_deps; ++i) { // find in set
+      target* d = set->deps[i];
+      if (!strcmp(name, d->name)) {
+        t = d;
+        break;
+      }
+    }
+  }
+  if (!t) {
+    t = calloc(1, sizeof(target));
+    t->name = name;
+    if (set) append_target(t, set);
+  }
+  append_target(t, parent);
+  return t;
 }
 
 void print_targets(const target* t) {
@@ -81,15 +99,15 @@ void print_targets(const target* t) {
 
   printf("%s:", t->name);
 
-  const target* dep = t->deps;
-  const target* const end = dep + t->num_deps;
+  target** dep = t->deps;
+  target** const end = dep + t->num_deps;
   for (; dep != end; ++dep)
-    printf(" %s", dep->name);
+    printf(" %s", (*dep)->name);
   printf("\n");
 
   dep = t->deps;
   for (; dep != end; ++dep)
-    print_targets(dep);
+    print_targets(*dep);
 }
 
 void free_targets(target* t) {
@@ -221,21 +239,21 @@ void dir_loop(char* path, size_t len, size_t cap) {
 
             // add executable
             name = malloc(3 + stem.len + 1);
-            target* exe = add_target(&executables, name);
+            target* exe = add_target(name, &executables, NULL);
             memcpy(name, "bin", 3); name += 3;
             memcpy(name, stem.str, stem.len); name += stem.len;
             *name = '\0';
 
             // add object
             name = malloc(6 + stem.len + 2 + 1);
-            target* obj = add_target(exe, name);
+            target* obj = add_target(name, exe, &objects);
             memcpy(name, ".build", 6); name += 6;
             memcpy(name, stem.str, stem.len); name += stem.len;
             memcpy(name, ".o", 3);
 
             // add source
             name = malloc(len2+1);
-            target* src = add_target(obj, name);
+            target* src = add_target(name, obj, &sources);
             memcpy(name, path, len2+1);
           }
 
