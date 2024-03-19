@@ -28,6 +28,9 @@
   exit(1); \
 }
 
+#define ISBLANK(c) \
+  ( c == ' ' || c == '\t' || c == '\n' || c == '\r' )
+
 char* file_buf;
 size_t file_cap;
 
@@ -62,7 +65,7 @@ size_t bit_ceil(size_t v) {
 void append_target(target* t, target* parent) {
   const size_t n = parent->num_deps;
   if (n == 0) {
-    parent->deps = calloc(1, sizeof(target*));
+    parent->deps = malloc(sizeof(target*));
   } else {
     const size_t cap = bit_ceil(n);
     if (n == cap) {
@@ -77,8 +80,10 @@ void append_target(target* t, target* parent) {
 target* add_target(const char* name, target* parent, target* set) {
   target* t = NULL;
   if (set) {
-    for (size_t i = 0; i < set->num_deps; ++i) { // find in set
-      target* d = set->deps[i];
+    target** it = set->deps;
+    target** const end = it + set->num_deps;
+    for (; it != end; ++it) { // find in set
+      target* d = *it;
       if (!strcmp(name, d->name)) {
         t = d;
         break;
@@ -115,9 +120,6 @@ void free_targets(target* t) {
 }
 
 bool is_main(const char* buf) {
-#define ISBLANK(c) \
-  ( c == ' ' || c == '\t' || c == '\n' || c == '\r' )
-
 #define PREFIX "int"
 #define MARKER "main"
 
@@ -157,7 +159,56 @@ bool is_main(const char* buf) {
 
 #undef MARKER
 #undef PREFIX
-#undef ISBLANK
+}
+
+// TODO: ignore strings
+// TODO: ignore comments
+
+const char* find_include(char** bufp) {
+  char c;
+  for (char* a = *bufp;;) {
+    c = *a;
+    if (ISBLANK(c)) continue;
+    if (c != '#') {
+seek_new_line:
+      a = strchr(a, '\n');
+      if (!a) return NULL;
+      ++a;
+      continue;
+    }
+    for (;;) {
+      c = *++a;
+      if (!ISBLANK(c)) break;
+    }
+    if (strcmp(a, "include")) continue;
+    a += sizeof("include") - 1;
+    for (;;) {
+      c = *a;
+      if (!ISBLANK(c)) break;
+      ++a;
+    }
+    if (c != '"' && c != '<') goto seek_new_line;
+    const char* header = a;
+    const char closing = c == '"' ? '"' : '>';
+
+    for (;;) {
+      c = *a;
+      if (c == closing) {
+        *a = '\0';
+        *bufp = a+1;
+        return header;
+      } else {
+        switch (c) {
+          case '\0':
+            return NULL;
+          case '\n':
+            ++a;
+            goto next;
+        }
+      }
+    }
+next: ;
+  }
 }
 
 void dir_loop(char* path, size_t len, size_t cap) {
@@ -225,9 +276,6 @@ void dir_loop(char* path, size_t len, size_t cap) {
           if (read(fd, file_buf, file_size) < 0) ERR("read('%s')", path)
           file_buf[file_size] = '\0';
 
-          /* while (find_include(file_buf)) { */
-          /* } */
-
           if (is_main(file_buf)) {
             string stem;
             stem.str = strchr(path, '/');
@@ -255,6 +303,13 @@ void dir_loop(char* path, size_t len, size_t cap) {
             name = malloc(len2+1);
             target* src = add_target(name, obj, &sources);
             memcpy(name, path, len2+1);
+          }
+
+          for (char* buf = file_buf;;) {
+            const char* header = find_include(&buf);
+            if (!header) break;
+
+            printf("%s\n", header);
           }
 
           close(fd);
