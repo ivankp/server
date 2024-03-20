@@ -144,10 +144,9 @@ const char* scan_code(char** bufp, bool* main) {
             close = '"';
             break;
           case '<':
-            if (!only_quoted_headers) {
-              close = '>';
-              break;
-            } else goto next_line;
+            if (only_quoted_headers) goto next_line;
+            close = '>';
+            break;
           case '\n':
             new_line = true;
             goto next;
@@ -188,11 +187,10 @@ const char* scan_code(char** bufp, bool* main) {
             a += 2;
             goto next_line;
           case '*':
-            if ((a = strstr(a+2, "*/"))) {
-              a += 1; // position a at last character of searched substring
-              new_line = false;
-              goto next;
-            } else goto end;
+            if (!(a = strstr(a+2, "*/"))) goto end;
+            a += 1; // position a at last character of searched substring
+            new_line = false;
+            goto next;
         }
       case 'm':
         if (!main || *main || strncmp(a+1, "ain", 3)) break;
@@ -218,21 +216,21 @@ const char* scan_code(char** bufp, bool* main) {
             }
           }
         } else {
-          // unskip blanks, because \n need to set new_line = true
-          // if not a mart of main
+          // unskip blanks, because \n needs to set new_line = true
+          // if not a part of int main()
           a = m + 4;
         }
-        goto next;
+        break;
       case '\0': goto end;
     }
 
-next: continue;
+next:
+    continue;
 
 next_line:
-    if ((a = strchr(a, '\n'))) {
-      new_line = true;
-      goto next;
-    } else goto end;
+    if (!(a = strchr(a, '\n'))) goto end;
+    new_line = true;
+    goto next;
   }
 
 end:
