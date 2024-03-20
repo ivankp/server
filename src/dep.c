@@ -31,6 +31,8 @@
 #define ISBLANK(c) \
   ( c == ' ' || c == '\t' || c == '\n' || c == '\r' )
 
+bool only_quoted_headers = true;
+
 char* file_buf;
 size_t file_cap;
 
@@ -119,96 +121,126 @@ void free_targets(target* t) {
   // TODO
 }
 
-bool is_main(const char* buf) {
-#define PREFIX "int"
-#define MARKER "main"
-
-  const size_t nmarker = sizeof(MARKER) - 1;
-  const size_t nprefix = sizeof(PREFIX) - 1;
-
-  const char* const prefix_last = buf + (nprefix - 1);
-
-  for (const char* a = buf;;) {
-    const char* m = strstr(a, MARKER);
-    if (!m) return false;
-
-    // printf(" %.6s\n", m);
-    a = m + nmarker;
-    for (;;) {
-      const char c = *a;
-      if (!ISBLANK(c)) break;
-      ++a;
-    }
-    if (*a != '(') continue;
-
-    for (const char* b = m; b > prefix_last; ) {
-      char c = *--b;
-      if (!ISBLANK(c)) {
-        // printf(" %.12s\n", b);
-        if (
-          m - b > 1 && // at least one space between
-          !strncmp((b -= (nprefix - 1)), PREFIX, nprefix) &&
-          ( b == buf || ( c = b[-1], ISBLANK(c) ) )
-        )
-          return true;
-        else
-          break;
-      }
-    }
-  }
-
-#undef MARKER
-#undef PREFIX
+static inline char* strskp(char* dest, const char* src) {
+  return dest + strspn(dest, src);
 }
 
-// TODO: ignore strings
-// TODO: ignore comments
-
-const char* find_include(char** bufp) {
-  char c;
-  for (char* a = *bufp;;) {
-    c = *a;
-    if (ISBLANK(c)) continue;
-    if (c != '#') {
-seek_new_line:
-      a = strchr(a, '\n');
-      if (!a) return NULL;
-      ++a;
-      continue;
-    }
-    for (;;) {
-      c = *++a;
-      if (!ISBLANK(c)) break;
-    }
-    if (strcmp(a, "include")) continue;
-    a += sizeof("include") - 1;
-    for (;;) {
-      c = *a;
-      if (!ISBLANK(c)) break;
-      ++a;
-    }
-    if (c != '"' && c != '<') goto seek_new_line;
-    const char* header = a;
-    const char closing = c == '"' ? '"' : '>';
-
-    for (;;) {
-      c = *a;
-      if (c == closing) {
-        *a = '\0';
-        *bufp = a+1;
-        return header;
-      } else {
-        switch (c) {
-          case '\0':
-            return NULL;
+const char* scan_code(char** bufp, bool* main) {
+  bool new_line = true;
+  for (char* a = *bufp; ; ++a) {
+    switch (*a) {
+      case '\n': new_line = true;
+      case ' ':
+      case '\t': break;
+      case '\r': goto next_line;
+      case '#':
+        if (!new_line) goto next_line;
+        a = strskp(a+1, " \t");
+        if (strncmp(a, "include", 7)) goto next_line;
+        a = strskp(a+8, " \t");
+        char close;
+        switch (*a) {
+          case '"':
+            close = '"';
+            break;
+          case '<':
+            if (!only_quoted_headers) {
+              close = '>';
+              break;
+            } else goto next_line;
           case '\n':
-            ++a;
+            new_line = true;
             goto next;
+          default:
+            goto next_line;
         }
-      }
+        for (char* b = ++a; ; ++a) {
+          const char c = *a;
+          if (c == close) { // return included header
+            /* printf("L%d: %lu %.12s\n", __LINE__, strlen(*bufp), *bufp); */
+            *bufp = a+1;
+            /* printf("L%d: %lu %.12s\n", __LINE__, strlen(*bufp), *bufp); */
+            *a = '\0';
+            /* printf("L%d: %lu %.12s\n", __LINE__, strlen(*bufp), *bufp); */
+            return b;
+          } else if (c == '\n') {
+            new_line = true;
+            goto next;
+          } else if (c == '\r') {
+            goto next_line;
+          } else if (c == '\0') {
+            goto end;
+          }
+        }
+      case '"':
+        for (;; ++a) {
+          switch (*a) {
+            case '"':
+              new_line = false;
+              goto next;
+            case '\n':
+              new_line = true;
+              goto next;
+            case '\r': goto next_line;
+            case '\0': goto end;
+          }
+        }
+      case '/':
+        switch (a[1]) {
+          case '/':
+            a += 2;
+            goto next_line;
+          case '*':
+            if ((a = strstr(a+2, "*/"))) {
+              a += 1; // position a at last character of searched substring
+              new_line = false;
+              goto next;
+            } else goto end;
+        }
+      case 'm':
+        if (!main || *main || strncmp(a+1, "ain", 3)) break;
+        char* m = a; // main
+        a = strskp(a+4, " \t\r\n");
+        if (*a == '(') {
+          const char* const buf = *bufp;
+          const char* const end = buf + 2;
+          const char* b = a;
+          while (b > end) { // int
+            char c = *--b;
+            if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
+              if (
+                m - b > 1 && // at least one space between
+                !strncmp((b -= 2), "int", 3) &&
+                ( b == buf || (
+                  c = b[-1], c == ' ' || c == '\t' || c == '\r' || c == '\n'
+                ) )
+              ) {
+                *main = true;
+              }
+              break;
+            }
+          }
+        } else {
+          // unskip blanks, because \n need to set new_line = true
+          // if not a mart of main
+          a = m + 4;
+        }
+        goto next;
+      case '\0': goto end;
     }
-next: ;
+
+next: continue;
+
+next_line:
+    /* printf("L%d: %lu %.12s\n", __LINE__, strlen(a), a); */
+    if ((a = strchr(a, '\n'))) {
+      new_line = true;
+      goto next;
+    } else goto end;
   }
+
+end:
+  return NULL;
 }
 
 void dir_loop(char* path, size_t len, size_t cap) {
@@ -276,7 +308,16 @@ void dir_loop(char* path, size_t len, size_t cap) {
           if (read(fd, file_buf, file_size) < 0) ERR("read('%s')", path)
           file_buf[file_size] = '\0';
 
-          if (is_main(file_buf)) {
+          bool main = false;
+          for (char* buf = file_buf;;) {
+            /* printf("L%d: %lu %.12s\n", __LINE__, strlen(buf), buf); */
+            const char* header = scan_code(&buf, &main);
+            if (!header) break;
+
+            printf("  %s\n", header);
+          }
+
+          if (main) {
             string stem;
             stem.str = strchr(path, '/');
             stem.len = len2
@@ -305,13 +346,6 @@ void dir_loop(char* path, size_t len, size_t cap) {
             memcpy(name, path, len2+1);
           }
 
-          for (char* buf = file_buf;;) {
-            const char* header = find_include(&buf);
-            if (!header) break;
-
-            printf("%s\n", header);
-          }
-
           close(fd);
         }
         break;
@@ -328,6 +362,7 @@ int main(int argc, char** argv) {
 
   dir_loop(path, strlen(path), sizeof(path));
 
+  printf("\n");
   print_targets(&executables);
 
   free(file_buf);
