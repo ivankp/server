@@ -157,11 +157,8 @@ const char* scan_code(char** bufp, bool* main) {
         for (char* b = ++a; ; ++a) {
           const char c = *a;
           if (c == close) { // return included header
-            /* printf("L%d: %lu %.12s\n", __LINE__, strlen(*bufp), *bufp); */
             *bufp = a+1;
-            /* printf("L%d: %lu %.12s\n", __LINE__, strlen(*bufp), *bufp); */
             *a = '\0';
-            /* printf("L%d: %lu %.12s\n", __LINE__, strlen(*bufp), *bufp); */
             return b;
           } else if (c == '\n') {
             new_line = true;
@@ -204,7 +201,7 @@ const char* scan_code(char** bufp, bool* main) {
         if (*a == '(') {
           const char* const buf = *bufp;
           const char* const end = buf + 2;
-          const char* b = a;
+          const char* b = m;
           while (b > end) { // int
             char c = *--b;
             if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
@@ -232,7 +229,6 @@ const char* scan_code(char** bufp, bool* main) {
 next: continue;
 
 next_line:
-    /* printf("L%d: %lu %.12s\n", __LINE__, strlen(a), a); */
     if ((a = strchr(a, '\n'))) {
       new_line = true;
       goto next;
