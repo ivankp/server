@@ -35,6 +35,11 @@
   exit(1); \
 }
 
+#define NODE_LOOP(IT, NODE) for ( \
+  node ** IT = NODE->nodes, \
+       ** const end = IT + NODE->nodes_len; \
+  IT != end; ++IT )
+
 // ------------------------------------------------------------------
 
 const bool only_quoted_headers = true;
@@ -175,9 +180,7 @@ void print_tree(const node* a, int n) {
     printf("  ");
   printf("%s\n", a->name);
 
-  node** b = a->nodes;
-  node** const end = b + a->nodes_len;
-  for (; b != end; ++b)
+  NODE_LOOP(b, a)
     print_tree(*b, n+1);
 }
 
@@ -323,57 +326,11 @@ const char* path_ext(const char* path) {
   return NULL;
 }
 
-void dir_loop(
-  char* path, size_t len, size_t cap, void (*process_file)(const char*)
-) {
-  DIR* D = opendir(path);
-  if (!D) ERR("opendir('%s')", path)
-
-  char* path2 = path + len;
-  *path2 = '/';
-  ++path2;
-  ++len;
-
-  const size_t rem = cap - len - 1; // 1 for null
-
-  for (struct dirent *d; (d = readdir(D)); ) {
-    const char* const name2 = d->d_name;
-
-    if (!name2[strspn(name2, ".")]) // . ..
-      continue;
-
-    const size_t name2_len = strlen(name2);
-    if (rem < name2_len) {
-      fprintf(stderr, ERROR_PREF "path is too long\n");
-      exit(1);
-    }
-
-    const size_t len2 = len + name2_len;
-    memcpy(path2, name2, name2_len+1);
-
-    switch (d->d_type) {
-      case DT_DIR:
-        dir_loop(path, len2, cap, process_file);
-        break;
-      case DT_REG:
-      case DT_LNK:
-        const char* ext = path_ext(path);
-        if (ext && !(
-          strcmp(ext, "c") &&
-          strcmp(ext, "cc") &&
-          strcmp(ext, "cpp") &&
-          strcmp(ext, "cxx") &&
-          strcmp(ext, "c++") &&
-          strcmp(ext, "C")
-        )) process_file(path);
-        break;
-    }
-  }
-
-  closedir(D);
-}
-
 void read_file(const char* path) {
+  // file is read into global storage
+  // processing of one file must be completed before the next one is read
+  // this needs to be considered for recursive functions
+
   const int fd = open(path, O_RDONLY);
   if (fd < 0) ERR("open('%s')", path)
 
@@ -431,16 +388,32 @@ void process_source_recursive(const char* path, node* source, bool* main) {
     add_node(source, header);
   }
 
+  qsort(source->nodes, source->nodes_len, sizeof(node*), node_cmp);
+
   // process new headers
-  { node** it = source->nodes;
-    node** const end = it + source->nodes_len;
-    for (; it != end; ++it) {
-      node* header = *it;
-      if (header->new) {
-        header->new = 0;
-        process_source_recursive(header->name, header, NULL);
-      }
+  NODE_LOOP(it, source) {
+    node* header = *it;
+    if (header->new) {
+      header->new = 0;
+      process_source_recursive(header->name, header, NULL);
     }
+  }
+}
+
+void flatten(node* dest, node* src) {
+  NODE_LOOP(it, src) {
+    node* header = *it;
+    uint32_t i = lower_bound(
+      dest->nodes, dest->nodes_len, sizeof(node*), header->name,
+      node_name_cmp
+    );
+    if (
+      i == dest->nodes_len ||
+      strcmp(dest->nodes[i]->name, header->name) != 0
+    ) { // new header
+      add_node_at(dest, header, i);
+    }
+    flatten(dest, header);
   }
 }
 
@@ -449,6 +422,11 @@ void process_source(const char* path) {
 
   bool main = false;
   process_source_recursive(path, source, &main);
+
+  // flatten headers list
+  // TODO: fix flatten
+  /* NODE_LOOP(it, source) */
+  /*   flatten(source, *it); */
 
   /*
   if (main) {
@@ -482,39 +460,62 @@ void process_source(const char* path) {
   */
 }
 
+void dir_loop(char* path, size_t len, size_t cap) {
+  DIR* D = opendir(path);
+  if (!D) ERR("opendir('%s')", path)
+
+  char* path2 = path + len;
+  *path2 = '/';
+  ++path2;
+  ++len;
+
+  const size_t rem = cap - len - 1; // 1 for null
+
+  for (struct dirent *d; (d = readdir(D)); ) {
+    const char* const name2 = d->d_name;
+
+    if (!name2[strspn(name2, ".")]) // . ..
+      continue;
+
+    const size_t name2_len = strlen(name2);
+    if (rem < name2_len) {
+      fprintf(stderr, ERROR_PREF "path is too long\n");
+      exit(1);
+    }
+
+    const size_t len2 = len + name2_len;
+    memcpy(path2, name2, name2_len+1);
+
+    switch (d->d_type) {
+      case DT_DIR:
+        dir_loop(path, len2, cap);
+        break;
+      case DT_REG:
+      case DT_LNK:
+        const char* ext = path_ext(path);
+        if (ext && !(
+          strcmp(ext, "c") &&
+          strcmp(ext, "cc") &&
+          strcmp(ext, "cpp") &&
+          strcmp(ext, "cxx") &&
+          strcmp(ext, "c++") &&
+          strcmp(ext, "C")
+        )) process_source(path);
+        break;
+    }
+  }
+
+  closedir(D);
+}
+
 int main(int argc, char** argv) {
   file_buf = malloc((file_cap = 1 << 12));
 
   char path[1 << 10];
-  /*
-  if (argc == 1) {
-    strcpy(path, "src");
-  } else {
-    const size_t len = strlen(argv[1]);
-    if (len < sizeof(path)) {
-      if (len == 0) {
-        fprintf(stderr, "empty starting path\n");
-        return 1;
-      }
-      memcpy(path, argv[1], len+1);
-    } else {
-      fprintf(stderr, "starting path longer than %lu bytes\n", sizeof(path));
-      return 1;
-    }
-  }
-  */
-
-  /*
-  strcpy(path, "include");
-  dir_loop(path, strlen(path), sizeof(path), process_header);
-  qsort(headers.nodes, headers.nodes_len, sizeof(node*), node_cmp);
-  */
-
   strcpy(path, "src");
-  dir_loop(path, strlen(path), sizeof(path), process_source);
+  dir_loop(path, strlen(path), sizeof(path));
 
-  /* for (uint32_t i=0; i<headers.nodes_len; ++i) */
-  /*   TEST_STR(headers.nodes[i]->name); */
+  qsort(sources.nodes, sources.nodes_len, sizeof(node*), node_cmp);
 
   printf("\n");
   print_tree(&headers, 0);
