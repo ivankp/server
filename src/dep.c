@@ -37,6 +37,10 @@
 
 // ------------------------------------------------------------------
 
+const bool only_quoted_headers = true;
+
+// ------------------------------------------------------------------
+
 uint32_t bit_ceil_32(uint32_t v) {
   --v;
   v |= v >> 1;
@@ -87,8 +91,6 @@ static inline char* strskp(char* dest, const char* src) {
 
 // ------------------------------------------------------------------
 
-bool only_quoted_headers = true;
-
 char* file_buf;
 size_t file_cap;
 
@@ -108,6 +110,7 @@ typedef struct node_s {
   struct node_s** nodes;
   uint32_t nodes_len;
   uint16_t name_len;
+  unsigned new : 1;
   unsigned hh_cc : 1;
 } node;
 
@@ -115,15 +118,7 @@ node
   executables = { .name = "exe" },
   objects = { },
   sources = { .name = "SOURCES" },
-  headers = { };
-
-int node_cmp(const void* a, const void* b) {
-  return strcmp((*(const node**)a)->name, (*(const node**)b)->name);
-}
-
-int node_name_cmp(const void* a, const void* b) {
-  return strcmp((*(const node**)a)->name, (const char*)b);
-}
+  headers = { .name = "HEADERS" };
 
 node* new_node(const char* name) {
   node* p = calloc(1, sizeof(node));
@@ -134,6 +129,14 @@ node* new_node(const char* name) {
     p->name = memcpy(malloc(len), name, len);
   }
   return p;
+}
+
+int node_cmp(const void* a, const void* b) {
+  return strcmp((*(const node**)a)->name, (*(const node**)b)->name);
+}
+
+int node_name_cmp(const void* a, const void* b) {
+  return strcmp((*(const node**)a)->name, (const char*)b);
 }
 
 uint32_t expand_nodes(node* parent) {
@@ -167,6 +170,17 @@ node* add_node_at(node* parent, node* child, uint32_t i) {
   return *a = child;
 }
 
+void print_tree(const node* a, int n) {
+  for (int i = 0; i < n; ++i)
+    printf("  ");
+  printf("%s\n", a->name);
+
+  node** b = a->nodes;
+  node** const end = b + a->nodes_len;
+  for (; b != end; ++b)
+    print_tree(*b, n+1);
+}
+
 void print_nodes(const node* a) {
   printf("%s:", a->name);
 
@@ -179,43 +193,6 @@ void print_nodes(const node* a) {
   b = a->nodes;
   for (; b != end; ++b)
     print_nodes(*b);
-}
-
-void append_target(target* t, target* parent) {
-  const size_t n = parent->num_deps;
-  if (n == 0) {
-    parent->deps = malloc(sizeof(target*));
-  } else {
-    const size_t cap = bit_ceil_64(n);
-    if (n == cap) {
-      const size_t cap_bytes = cap * sizeof(target*);
-      parent->deps = realloc(parent->deps, cap_bytes * 2);
-    }
-  }
-  parent->deps[n] = t;
-  ++parent->num_deps;
-}
-
-target* add_target(const char* name, target* parent, target* set) {
-  target* t = NULL;
-  if (set) {
-    target** it = set->deps;
-    target** const end = it + set->num_deps;
-    for (; it != end; ++it) { // find in set
-      target* d = *it;
-      if (!strcmp(name, d->name)) {
-        t = d;
-        break;
-      }
-    }
-  }
-  if (!t) {
-    t = calloc(1, sizeof(target));
-    t->name = name;
-    if (set) append_target(t, set);
-  }
-  append_target(t, parent);
-  return t;
 }
 
 // ------------------------------------------------------------------
@@ -333,6 +310,19 @@ end:
   return NULL;
 }
 
+const char* path_ext(const char* path) {
+  if (path) {
+    const char* a = path + strlen(path);
+    while (a != path) {
+      switch (*--a) {
+        case '.': return a+1;
+        case '/': return NULL;
+      }
+    }
+  }
+  return NULL;
+}
+
 void dir_loop(
   char* path, size_t len, size_t cap, void (*process_file)(const char*)
 ) {
@@ -367,7 +357,15 @@ void dir_loop(
         break;
       case DT_REG:
       case DT_LNK:
-        process_file(path);
+        const char* ext = path_ext(path);
+        if (ext && !(
+          strcmp(ext, "c") &&
+          strcmp(ext, "cc") &&
+          strcmp(ext, "cpp") &&
+          strcmp(ext, "cxx") &&
+          strcmp(ext, "c++") &&
+          strcmp(ext, "C")
+        )) process_file(path);
         break;
     }
   }
@@ -375,48 +373,7 @@ void dir_loop(
   closedir(D);
 }
 
-const char* path_ext(const char* path) {
-  if (path) {
-    const char* a = path + strlen(path);
-    while (a != path) {
-      switch (*--a) {
-        case '.': return a+1;
-        case '/': return NULL;
-      }
-    }
-  }
-  return NULL;
-}
-
-/*
-void process_header(const char* path) {
-  const char* ext = path_ext(path);
-  if (!ext || (
-    strcmp(ext, "h") &&
-    strcmp(ext, "hh") &&
-    strcmp(ext, "hpp") &&
-    strcmp(ext, "hxx") &&
-    strcmp(ext, "h++") &&
-    strcmp(ext, "H")
-  )) return;
-
-  add_node(&headers, new_node(path));
-}
-*/
-
-void process_source(const char* path) {
-  const char* ext = path_ext(path);
-  if (!ext || (
-    strcmp(ext, "c") &&
-    strcmp(ext, "cc") &&
-    strcmp(ext, "cpp") &&
-    strcmp(ext, "cxx") &&
-    strcmp(ext, "c++") &&
-    strcmp(ext, "C")
-  )) return;
-
-  printf("%s\n", path);
-
+void read_file(const char* path) {
   const int fd = open(path, O_RDONLY);
   if (fd < 0) ERR("open('%s')", path)
 
@@ -436,18 +393,17 @@ void process_source(const char* path) {
   if (read(fd, file_buf, file_size) < 0) ERR("read('%s')", path)
   file_buf[file_size] = '\0';
 
-  // --------------------------------------------------------
+  close(fd);
+}
 
-  // add source
-  /* name = malloc(len2+1); */
-  /* target* src = add_target(name, obj, &sources); */
-  /* memcpy(name, path, len2+1); */
+void process_source_recursive(const char* path, node* source, bool* main) {
+  printf("%s\n", path);
 
-  node* source = add_node(&sources, new_node(path));
+  read_file(path);
 
-  bool main = false;
+  // find includes (and main) in the current source
   for (char* buf = file_buf;;) {
-    const char* include = scan_code(&buf, &main);
+    const char* include = scan_code(&buf, main);
     if (!include) break;
 
     printf("  %s\n", include);
@@ -468,11 +424,31 @@ void process_source(const char* path) {
       access(header_path, F_OK) == 0 // header file exists
     ) {
       header = add_node_at(&headers, new_node(header_path), i);
+      header->new = 1;
     } else {
       header = headers.nodes[i];
     }
     add_node(source, header);
   }
+
+  // process new headers
+  { node** it = source->nodes;
+    node** const end = it + source->nodes_len;
+    for (; it != end; ++it) {
+      node* header = *it;
+      if (header->new) {
+        header->new = 0;
+        process_source_recursive(header->name, header, NULL);
+      }
+    }
+  }
+}
+
+void process_source(const char* path) {
+  node* source = add_node(&sources, new_node(path));
+
+  bool main = false;
+  process_source_recursive(path, source, &main);
 
   /*
   if (main) {
@@ -504,8 +480,6 @@ void process_source(const char* path) {
     memcpy(name, path, len2+1);
   }
   */
-
-  close(fd);
 }
 
 int main(int argc, char** argv) {
@@ -543,7 +517,10 @@ int main(int argc, char** argv) {
   /*   TEST_STR(headers.nodes[i]->name); */
 
   printf("\n");
-  print_nodes(&sources);
+  print_tree(&headers, 0);
+
+  printf("\n");
+  print_tree(&sources, 0);
 
   free(file_buf);
 }
