@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <errno.h>
+#include <assert.h>
 
 #include <unistd.h>
 #include <sys/stat.h>
@@ -36,8 +37,8 @@
 }
 
 #define NODE_LOOP(IT, NODE) for ( \
-  node ** IT = NODE->nodes, \
-       ** const end = IT + NODE->nodes_len; \
+  node ** IT = (NODE)->nodes, \
+       ** const end = IT + (NODE)->nodes_len; \
   IT != end; ++IT )
 
 // ------------------------------------------------------------------
@@ -67,6 +68,10 @@ uint64_t bit_ceil_64(uint64_t v) {
   return ++v;
 }
 
+static inline char* strskp(char* dest, const char* src) {
+  return dest + strspn(dest, src);
+}
+
 size_t lower_bound(
   void* ptr, size_t count, size_t size, const void* value,
   int (*comp)(const void*, const void*)
@@ -90,8 +95,20 @@ size_t lower_bound(
   return (a - ((unsigned char*)ptr)) / size;
 }
 
-static inline char* strskp(char* dest, const char* src) {
-  return dest + strspn(dest, src);
+size_t unique(
+  void* ptr, size_t count, size_t size,
+  int (*comp)(const void*, const void*)
+) {
+  unsigned char *a = ptr, *end = a + count * size;
+
+  if (a == end) return 0;
+
+  unsigned char *b = a;
+  while ((a += size) != end)
+    if (comp(a, b) != 0 && (b += size) != a)
+      memcpy(b, a, size);
+
+  return ((b + size) - ((unsigned char*)ptr)) / size;
 }
 
 // ------------------------------------------------------------------
@@ -134,6 +151,10 @@ node* new_node(const char* name) {
     p->name = memcpy(malloc(len), name, len);
   }
   return p;
+}
+
+int ptr_cmp(const void* a, const void* b) {
+  return (*(const unsigned char**)a) - (*(const unsigned char**)b);
 }
 
 int node_cmp(const void* a, const void* b) {
@@ -388,8 +409,6 @@ void process_source_recursive(const char* path, node* source, bool* main) {
     add_node(source, header);
   }
 
-  qsort(source->nodes, source->nodes_len, sizeof(node*), node_cmp);
-
   // process new headers
   NODE_LOOP(it, source) {
     node* header = *it;
@@ -400,20 +419,19 @@ void process_source_recursive(const char* path, node* source, bool* main) {
   }
 }
 
-void flatten(node* dest, node* src) {
-  NODE_LOOP(it, src) {
-    node* header = *it;
-    uint32_t i = lower_bound(
-      dest->nodes, dest->nodes_len, sizeof(node*), header->name,
-      node_name_cmp
-    );
-    if (
-      i == dest->nodes_len ||
-      strcmp(dest->nodes[i]->name, header->name) != 0
-    ) { // new header
-      add_node_at(dest, header, i);
-    }
-    flatten(dest, header);
+uint32_t tree_count(node* root) {
+  uint32_t n = root->nodes_len;
+  NODE_LOOP(it, root) {
+    n += tree_count(*it);
+  }
+  return n;
+}
+
+void add_children(node* root, node* child) {
+  NODE_LOOP(it, child) {
+    node* grandchild = *it;
+    root->nodes[root->nodes_len++] = grandchild;
+    add_children(root, grandchild);
   }
 }
 
@@ -423,10 +441,25 @@ void process_source(const char* path) {
   bool main = false;
   process_source_recursive(path, source, &main);
 
-  // flatten headers list
-  // TODO: fix flatten
-  /* NODE_LOOP(it, source) */
-  /*   flatten(source, *it); */
+  const uint32_t num_headers = tree_count(source);
+  // allocate enough memory to store all indirectly included headers
+  if (num_headers > bit_ceil_32(source->nodes_len)) {
+    const size_t cap_bytes = num_headers * sizeof(node*);
+    source->nodes = realloc(source->nodes, cap_bytes);
+  }
+
+  NODE_LOOP(it, source) {
+    add_children(source, *it);
+  }
+  assert(source->nodes_len == num_headers);
+
+  qsort(source->nodes, num_headers, sizeof(node*), node_cmp);
+
+  // it is sufficient to compare pointers
+  // because there are no redundant header nodes
+  source->nodes_len =
+    unique(source->nodes, num_headers, sizeof(node*), ptr_cmp);
+
 
   /*
   if (main) {
@@ -519,9 +552,20 @@ int main(int argc, char** argv) {
 
   printf("\n");
   print_tree(&headers, 0);
+  TEST("%u", tree_count(&headers))
 
-  printf("\n");
-  print_tree(&sources, 0);
+  /* printf("\n"); */
+  /* print_tree(&sources, 0); */
+  /* TEST("%u", tree_count(&sources)) */
+  printf("\n%s\n", sources.name);
+  NODE_LOOP(it, &sources) {
+    node* source = *it;
+    printf("%s\n", source->name);
+    NODE_LOOP(it, source) {
+      node* header = *it;
+      printf("  %s\n", header->name);
+    }
+  }
 
   free(file_buf);
 }
