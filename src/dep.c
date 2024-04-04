@@ -4,7 +4,6 @@
 #include <stdbool.h>
 #include <string.h>
 #include <errno.h>
-#include <assert.h>
 
 #include <unistd.h>
 #include <sys/stat.h>
@@ -38,7 +37,7 @@
 
 #define NODE_LOOP(IT, NODE) for ( \
   node ** IT = (NODE)->nodes, \
-       ** const end = IT + (NODE)->nodes_len; \
+       ** const end = IT + (NODE)->size; \
   IT != end; ++IT )
 
 // ------------------------------------------------------------------
@@ -111,6 +110,25 @@ size_t unique(
   return ((b + size) - ((unsigned char*)ptr)) / size;
 }
 
+const char* path_ext(const char* path, size_t len) {
+  const char* a = path + len;
+  while (a != path) {
+    switch (*--a) {
+      case '.': return a+1;
+      case '/': return NULL;
+    }
+  }
+  return NULL;
+}
+
+const char* name_ext(const char* name, size_t len) {
+  const char* a = name + len;
+  while (a != name)
+    if (*--a == '.')
+      return a+1;
+  return NULL;
+}
+
 // ------------------------------------------------------------------
 
 char* file_buf;
@@ -130,10 +148,8 @@ typedef struct target_s {
 typedef struct node_s {
   const char* name;
   struct node_s** nodes;
-  uint32_t nodes_len;
-  uint16_t name_len;
+  uint32_t size;
   unsigned new : 1;
-  unsigned hh_cc : 1;
 } node;
 
 node
@@ -146,7 +162,6 @@ node* new_node(const char* name) {
   node* p = calloc(1, sizeof(node));
   if (name) {
     size_t len = strlen(name);
-    p->name_len = len;
     ++len;
     p->name = memcpy(malloc(len), name, len);
   }
@@ -165,8 +180,17 @@ int node_name_cmp(const void* a, const void* b) {
   return strcmp((*(const node**)a)->name, (const char*)b);
 }
 
+int node_name_cmp_no_ext(const void* a, const void* b) {
+  const char* path = (*(const node**)a)->name;
+  size_t len = strlen(path);
+  const char* ext = path_ext(path, len);
+  if (ext)
+    len = (ext-1) - path;
+  return strncmp(path, (const char*)b, len);
+}
+
 uint32_t expand_nodes(node* parent) {
-  const uint32_t n = parent->nodes_len;
+  const uint32_t n = parent->size;
   if (n == 0) {
     parent->nodes = malloc(sizeof(node*));
   } else {
@@ -176,7 +200,7 @@ uint32_t expand_nodes(node* parent) {
       parent->nodes = realloc(parent->nodes, cap_bytes * 2);
     }
   }
-  return parent->nodes_len++; // new top index
+  return parent->size++; // new top index
 }
 
 node* add_node(node* parent, node* child) {
@@ -209,7 +233,7 @@ void print_nodes(const node* a) {
   printf("%s:", a->name);
 
   node** b = a->nodes;
-  node** const end = b + a->nodes_len;
+  node** const end = b + a->size;
   for (; b != end; ++b)
     printf(" %s", (*b)->name);
   printf("\n");
@@ -334,19 +358,6 @@ end:
   return NULL;
 }
 
-const char* path_ext(const char* path) {
-  if (path) {
-    const char* a = path + strlen(path);
-    while (a != path) {
-      switch (*--a) {
-        case '.': return a+1;
-        case '/': return NULL;
-      }
-    }
-  }
-  return NULL;
-}
-
 void read_file(const char* path) {
   // file is read into global storage
   // processing of one file must be completed before the next one is read
@@ -390,17 +401,18 @@ void process_source_recursive(const char* path, node* source, bool* main) {
     strcpy(header_path+8, include);
 
     uint32_t i = lower_bound(
-      headers.nodes, headers.nodes_len, sizeof(node*), header_path,
+      headers.nodes, headers.size, sizeof(node*), header_path,
       node_name_cmp
     );
 
     node* header;
     if (
-      ( i == headers.nodes_len ||
+      ( i == headers.size ||
         strcmp(headers.nodes[i]->name, header_path) != 0
       ) && // new header
       access(header_path, F_OK) == 0 // header file exists
     ) {
+      // TODO: implement lower complexity algorithm for headers (set)
       header = add_node_at(&headers, new_node(header_path), i);
       header->new = 1;
     } else {
@@ -420,7 +432,7 @@ void process_source_recursive(const char* path, node* source, bool* main) {
 }
 
 uint32_t tree_count(node* root) {
-  uint32_t n = root->nodes_len;
+  uint32_t n = root->size;
   NODE_LOOP(it, root) {
     n += tree_count(*it);
   }
@@ -430,7 +442,7 @@ uint32_t tree_count(node* root) {
 void add_children(node* root, node* child) {
   NODE_LOOP(it, child) {
     node* grandchild = *it;
-    root->nodes[root->nodes_len++] = grandchild;
+    root->nodes[root->size++] = grandchild;
     add_children(root, grandchild);
   }
 }
@@ -443,7 +455,7 @@ void process_source(const char* path) {
 
   const uint32_t num_headers = tree_count(source);
   // allocate enough memory to store all indirectly included headers
-  if (num_headers > bit_ceil_32(source->nodes_len)) {
+  if (num_headers > bit_ceil_32(source->size)) {
     const size_t cap_bytes = num_headers * sizeof(node*);
     source->nodes = realloc(source->nodes, cap_bytes);
   }
@@ -451,15 +463,13 @@ void process_source(const char* path) {
   NODE_LOOP(it, source) {
     add_children(source, *it);
   }
-  assert(source->nodes_len == num_headers);
 
   qsort(source->nodes, num_headers, sizeof(node*), node_cmp);
 
   // it is sufficient to compare pointers
   // because there are no redundant header nodes
-  source->nodes_len =
+  source->size =
     unique(source->nodes, num_headers, sizeof(node*), ptr_cmp);
-
 
   /*
   if (main) {
@@ -525,7 +535,7 @@ void dir_loop(char* path, size_t len, size_t cap) {
         break;
       case DT_REG:
       case DT_LNK:
-        const char* ext = path_ext(path);
+        const char* ext = name_ext(name2, name2_len);
         if (ext && !(
           strcmp(ext, "c") &&
           strcmp(ext, "cc") &&
@@ -548,11 +558,12 @@ int main(int argc, char** argv) {
   strcpy(path, "src");
   dir_loop(path, strlen(path), sizeof(path));
 
-  qsort(sources.nodes, sources.nodes_len, sizeof(node*), node_cmp);
+  // sort sources for searching
+  qsort(sources.nodes, sources.size, sizeof(node*), node_cmp);
 
-  printf("\n");
-  print_tree(&headers, 0);
-  TEST("%u", tree_count(&headers))
+  // printf("\n");
+  // print_tree(&headers, 0);
+  // TEST("%u", tree_count(&headers))
 
   /* printf("\n"); */
   /* print_tree(&sources, 0); */
@@ -564,6 +575,50 @@ int main(int argc, char** argv) {
     NODE_LOOP(it, source) {
       node* header = *it;
       printf("  %s\n", header->name);
+    }
+  }
+
+  node** const matched_sources = malloc(sizeof(node*) * headers.size);
+
+  // TODO: account for multiple matching files with different extensions
+
+  { node** source_ptr = matched_sources;
+    NODE_LOOP(it, &headers) {
+      const char* header = (*it)->name + 7; // remove include prefix
+      size_t len = strlen(header);
+      const char* ext = path_ext(header, len);
+      if (ext)
+        len = (ext-1) - header;
+      memcpy(path + 3, header, len);
+      path[len += 3] = '\0';
+
+      uint32_t i = lower_bound(
+        sources.nodes, sources.size, sizeof(node*), path,
+        node_name_cmp_no_ext
+      );
+
+      if (i == sources.size) goto no_match;
+
+      node* source = sources.nodes[i];
+
+      if (strncmp(source->name, path, len) == 0) {
+        *source_ptr = source;
+      } else {
+no_match:
+        *source_ptr = NULL;
+      }
+      ++source_ptr;
+    }
+  }
+
+  printf("\n");
+  { node** source_ptr = matched_sources;
+    NODE_LOOP(it, &headers) {
+      printf("%s\n", (*it)->name);
+      node* source = *source_ptr;
+      if (source)
+        printf("  %s\n", source->name);
+      ++source_ptr;
     }
   }
 
