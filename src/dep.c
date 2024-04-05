@@ -150,6 +150,7 @@ typedef struct node_s {
   struct node_s** nodes;
   uint32_t size;
   unsigned new : 1;
+  unsigned main : 1;
 } node;
 
 node
@@ -289,6 +290,7 @@ const char* scan_code(char** bufp, bool* main) {
             goto end;
           }
         }
+      // TODO: escaped quotes
       case '"':
         for (;; ++a) {
           switch (*a) {
@@ -386,7 +388,7 @@ void read_file(const char* path) {
 }
 
 void process_source_recursive(const char* path, node* source, bool* main) {
-  printf("%s\n", path);
+  /* printf("%s\n", path); */
 
   read_file(path);
 
@@ -395,7 +397,7 @@ void process_source_recursive(const char* path, node* source, bool* main) {
     const char* include = scan_code(&buf, main);
     if (!include) break;
 
-    printf("  %s\n", include);
+    /* printf("  %s\n", include); */
 
     static char header_path[8+(1<<10)] = "include/";
     strcpy(header_path+8, include);
@@ -471,36 +473,7 @@ void process_source(const char* path) {
   source->size =
     unique(source->nodes, num_headers, sizeof(node*), ptr_cmp);
 
-  /*
-  if (main) {
-    string stem;
-    stem.str = strchr(path, '/');
-    stem.len = len2
-             - (stem.str - path) // prefix (src)
-             - (name2_len - (ext - name2) + 1); // extension
-
-    char* name;
-
-    // add executable
-    name = malloc(3 + stem.len + 1);
-    target* exe = add_target(name, &executables, NULL);
-    memcpy(name, "bin", 3); name += 3;
-    memcpy(name, stem.str, stem.len); name += stem.len;
-    *name = '\0';
-
-    // add object
-    name = malloc(6 + stem.len + 2 + 1);
-    target* obj = add_target(name, exe, &objects);
-    memcpy(name, ".build", 6); name += 6;
-    memcpy(name, stem.str, stem.len); name += stem.len;
-    memcpy(name, ".o", 3);
-
-    // add source
-    name = malloc(len2+1);
-    target* src = add_target(name, obj, &sources);
-    memcpy(name, path, len2+1);
-  }
-  */
+  source->main = main;
 }
 
 void dir_loop(char* path, size_t len, size_t cap) {
@@ -568,6 +541,8 @@ int main(int argc, char** argv) {
   /* printf("\n"); */
   /* print_tree(&sources, 0); */
   /* TEST("%u", tree_count(&sources)) */
+
+  /*
   printf("\n%s\n", sources.name);
   NODE_LOOP(it, &sources) {
     node* source = *it;
@@ -577,6 +552,7 @@ int main(int argc, char** argv) {
       printf("  %s\n", header->name);
     }
   }
+  */
 
   node** const matched_sources = malloc(sizeof(node*) * headers.size);
 
@@ -611,6 +587,7 @@ no_match:
     }
   }
 
+  /*
   printf("\n");
   { node** source_ptr = matched_sources;
     NODE_LOOP(it, &headers) {
@@ -621,6 +598,122 @@ no_match:
       ++source_ptr;
     }
   }
+  */
+
+  /* printf("\n"); */
+  NODE_LOOP(it, &sources) {
+    node* source = *it;
+    if (!source->main) continue;
+
+    memcpy(path + 3, "bin", 3);
+    const char* name = source->name + 3;
+    size_t len = strlen(name);
+    const char* ext = path_ext(name, len);
+    if (ext)
+      len = (ext-1) - name;
+    memcpy(path + 6, name, len);
+    path[len += 6] = '\0';
+
+    node* exe = add_node(&executables, new_node(path + 3));
+
+    memcpy(path, ".build", 6);
+    strcpy(path+len, ".o");
+
+    uint32_t i = lower_bound(
+      objects.nodes, objects.size, sizeof(node*), path,
+      node_name_cmp
+    );
+
+    node* obj;
+    if (
+      i == objects.size ||
+      strcmp(objects.nodes[i]->name, path) != 0
+    ) {
+      // TODO: implement lower complexity algorithm (set)
+      obj = add_node_at(&objects, new_node(path), i);
+      add_node(obj, source);
+    } else {
+      obj = objects.nodes[i];
+    }
+    add_node(exe, obj);
+
+    NODE_LOOP(it, source) {
+      node* header = *it;
+
+      uint32_t i = lower_bound(
+        headers.nodes, headers.size, sizeof(node*), header->name,
+        node_name_cmp
+      );
+      node* source2 = matched_sources[i];
+      if (source2) {
+        const char* name = source2->name + 3;
+        size_t len = strlen(name);
+        const char* ext = path_ext(name, len);
+        if (ext)
+          len = (ext-1) - name;
+        memcpy(path + 6, name, len);
+        len += 6;
+        strcpy(path + len, ".o");
+
+        uint32_t i = lower_bound(
+          objects.nodes, objects.size, sizeof(node*), path,
+          node_name_cmp
+        );
+        // TODO: can this be done more optimally,
+        // without sorted insertion?
+
+        node* obj;
+        if (
+          i == objects.size ||
+          strcmp(objects.nodes[i]->name, path) != 0
+        ) {
+          // TODO: implement lower complexity algorithm (set)
+          obj = add_node_at(&objects, new_node(path), i);
+          add_node(obj, source2);
+        } else {
+          obj = objects.nodes[i];
+        }
+        add_node(exe, obj);
+      }
+    }
+  }
+
+  qsort(executables.nodes, executables.size, sizeof(node*), node_cmp);
+
+  /* print_tree(&executables, 0); */
+
+  printf("%s:", executables.name);
+  NODE_LOOP(it, &executables) {
+    node* exe = *it;
+    printf(" %s", exe->name);
+  }
+  printf("\n");
+
+  NODE_LOOP(it, &executables) {
+    node* exe = *it;
+    printf("%s:", exe->name);
+    NODE_LOOP(it, exe) {
+      node* obj = *it;
+      printf(" %s", obj->name);
+    }
+    printf("\n");
+  }
+
+  NODE_LOOP(it, &objects) {
+    node* obj = *it;
+    printf("%s:", obj->name);
+    NODE_LOOP(it, obj) {
+      node* src = *it;
+      printf(" %s", src->name);
+      NODE_LOOP(it, src) {
+        node* header = *it;
+        printf(" %s", header->name);
+      }
+    }
+    printf("\n");
+  }
 
   free(file_buf);
 }
+
+// TODO: check timestamps
